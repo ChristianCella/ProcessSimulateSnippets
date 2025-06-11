@@ -1,0 +1,8 @@
+C:\Users\chris\OneDrive - Politecnico di Milano\Politecnico di Milano\PhD - dottorato\GitHub repositories Lenovo\ProcessSimulateSnippets\obj\Debug\ProcessSimulateSnippets.csproj.AssemblyReference.cache
+C:\Users\chris\OneDrive - Politecnico di Milano\Politecnico di Milano\PhD - dottorato\GitHub repositories Lenovo\ProcessSimulateSnippets\obj\Debug\ProcessSimulateSnippets.csproj.CoreCompileInputs.cache
+C:\Program Files\Tecnomatix_2307\eMPower\DotNetCommands\ProcessSimulateSnippets.dll.config
+C:\Program Files\Tecnomatix_2307\eMPower\DotNetCommands\ProcessSimulateSnippets.dll
+C:\Program Files\Tecnomatix_2307\eMPower\DotNetCommands\ProcessSimulateSnippets.pdb
+C:\Users\chris\OneDrive - Politecnico di Milano\Politecnico di Milano\PhD - dottorato\GitHub repositories Lenovo\ProcessSimulateSnippets\obj\Debug\ProcessSimulateSnippets.csproj.CopyComplete
+C:\Users\chris\OneDrive - Politecnico di Milano\Politecnico di Milano\PhD - dottorato\GitHub repositories Lenovo\ProcessSimulateSnippets\obj\Debug\ProcessSimulateSnippets.dll
+C:\Users\chris\OneDrive - Politecnico di Milano\Politecnico di Milano\PhD - dottorato\GitHub repositories Lenovo\ProcessSimulateSnippets\obj\Debug\ProcessSimulateSnippets.pdb
