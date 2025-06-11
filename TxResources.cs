@@ -47,7 +47,7 @@ namespace ProcessSimulateSnippets
             j4.CurrentValue = joint_values[3];
             j5.CurrentValue = joint_values[4];
             j6.CurrentValue = joint_values[5];
-            TxApplication.RefreshDisplay();
+            //TxApplication.RefreshDisplay();
         }
 
         public ITxLocatableObject GetLocatableResource(string resource_name)
