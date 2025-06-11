@@ -64,6 +64,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="SocketCmd.cs" />
+    <Compile Include="SocketManager.cs" />
     <Compile Include="TestResourcesCmd.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TxResources.cs" />
