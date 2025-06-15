@@ -34,14 +34,19 @@ namespace ProcessSimulateSnippets
         public override void Execute(object cmdParams)
         {
 
-            double[] translation = new double[] { 500.0, 0.0, 0.0 };
+            double[] translation = new double[] { 0.0, 0.0, 0.0 };
             double[] rotation = new double[] { 0.0, 0.0, 0.0 };
             double[] joint_values = new double[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+            bool invisible = false;
 
             // This class is defined in TxResources.cs
-            TxResources ur5_resource = new TxResources();
-            ur5_resource.PlaceResource("UR5", translation, rotation);
-            ur5_resource.SetJointValue("UR5", joint_values);
+            TxResources item_resource = new TxResources();
+            TxResources robot_resource = new TxResources();
+            //robot_resource.PlaceResource("GoFa12", translation, rotation);
+            robot_resource.SetTCP("GoFa12", "TOOLFRAME");
+            //ur5_resource.SetJointValue("UR5", joint_values);
+
+            //item_resource.ChangeVisibility("YAOSC_cube", invisible);
 
         }
     }
