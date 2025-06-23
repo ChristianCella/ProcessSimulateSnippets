@@ -8,7 +8,7 @@ using System.Windows.Forms;
 using Tecnomatix.Engineering;
 using System.Collections.Generic;
 using Tecnomatix.Engineering.Olp;
-using System.Linq;
+
 
 namespace ProcessSimulateSnippets
 {
