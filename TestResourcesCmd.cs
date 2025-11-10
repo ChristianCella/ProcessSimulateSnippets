@@ -46,15 +46,15 @@ namespace ProcessSimulateSnippets
             TxResources line_resource = new TxResources();
             //robot_resource.PlaceResource("GoFa12", translation, rotation);
             //robot_resource.SetTCP("GoFa12", "TCPF_crate"); //TCPF_crate, TOOLFRAME
-            //robot_resource.UnMountToolGripper("GoFa12", "Collaborative_gripper", "collaborative_tool_station");
-            //robot_resource.MountToolGripper("GoFa12", "Collaborative_gripper", "tool_holder_offset", "BASEFRAME_collaborative");
+            robot_resource.UnMountToolGripper("GoFa12", "Crate_gripper", "crate_tool_station");
+            //robot_resource.MountToolGripper("GoFa12", "Crate_gripper", "tool_holder_offset", "BASEFRAME_crate", "TCPF_crate");
             //robot_resource.DisplayMountedTools("GoFa12");
             //robot_resource.ImposeRobotConfig("GoFa12", "fr6");
             //robot_resource.SetJointValue("GoFa12", joint_values);
             //item_resource.ChangeVisibility("YAOSC_cube", invisible);
-            // line_resource.CreateDevicePose("Line", device_pos, "TestPose");
+            //line_resource.CreateDevicePose("Line", device_pos, "TestPose");
             //robot_resource.ComputeJacobian();
-            robot_resource.PlaceResourceAccordingToFrame("Crate_3", "crate_low_on_slider_station");
+            //robot_resource.PlaceResourceAccordingToFrame("Crate_1", "crate_top_on_slider_station");
 
         }
     }

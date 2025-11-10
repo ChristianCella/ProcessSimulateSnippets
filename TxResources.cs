@@ -39,7 +39,7 @@ namespace ProcessSimulateSnippets
             PlaceResource(resource_name, translation, rotation);
         }
 
-        public void MountToolGripper(string robot_name, string tool_name, string flange_frame, string tool_frame)
+        public void MountToolGripper(string robot_name, string tool_name, string flange_frame, string tool_frame, string tcp_frame)
         {
             // Get the robot
             var robot = GetLocatableResource(robot_name);
@@ -60,6 +60,10 @@ namespace ProcessSimulateSnippets
             rob.MountTool(tool, flange_pose, tool_pose);
             TxApplication.RefreshDisplay();
 
+            // Shift the frame
+            SetTCP(robot_name, tcp_frame);
+            TxApplication.RefreshDisplay();
+
         }
 
         public void UnMountToolGripper(string robot_name, string tool_name, string station_name)
@@ -76,6 +80,10 @@ namespace ProcessSimulateSnippets
 
             // Move the tool to the station 
             PlaceResourceAccordingToFrame(tool_name, station_name);
+
+            // Put TCPF back in the robot flange
+            SetTCP(robot_name, "TOOLFRAME");
+            TxApplication.RefreshDisplay();
         }
 
         public void DisplayMountedTools(string robot_name)
