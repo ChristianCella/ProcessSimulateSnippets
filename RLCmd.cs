@@ -1,66 +1,47 @@
 ﻿using System;
-using System.Net;
-using System.Net.Sockets;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.IO;
 using System.Windows.Forms;
 using Tecnomatix.Engineering;
-using System.Collections.Generic;
-using Tecnomatix.Engineering.Olp;
-using System.Linq;
 
-namespace ProcessSimulateSnippets
+namespace DemoRL
 {
+    /// <summary>
+    /// Button that appears in Process Simulate.
+    /// Click it to start the RL server, then run the Python script.
+    /// </summary>
     public class RLCmd : TxButtonCommand
     {
-        public override string Category
-        {
-            get
-            {
-                return "Resource";
-            }
-        }
+        private SimpleRLEnvironment _environment;
 
-        public override string Name
-        {
-            get
-            {
-                return "Start RL";
-            }
-        }
+        public override string Category => "RL Demo";
+        public override string Name => "Start RL Server";
 
         public override void Execute(object cmdParams)
         {
+            // Close any previous server still running
+            _environment?.Dispose();
 
-            TxResources robot_resource = new TxResources();
-
-            // Run the simulation with events
-            TxSimulationPlayer player = TxApplication.ActiveDocument.SimulationPlayer;
-            TxSimulationPlayerSource source = new TxSimulationPlayerSource();
-            source = TxSimulationPlayerSource.TaskSimulationPlayer;
-            double dt = 0.10;
-            double time = 0.0;
-            player.Rewind();
-            //player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(robot_resource.player_TimeIntervalReached);
-            while (time < 8.0)
+            try
             {
-                player.JumpSimulationToTime(time, true, source); // step method
-                time = time + dt;
+                // ===================================================
+                // CHANGE THIS to match your robot's name in the scene
+                // ===================================================
+                string robotName = "GoFa12";
 
-                if (Math.Abs(time - 1.0) < 1e-6)
-                {
-                    robot_resource.AddToCompound("complete_op", "Human_task_2", 3.0);
-                    TxApplication.RefreshDisplay();
-                }
-
-                //TxApplication.RefreshDisplay();
-
-                //TxMessageBox.Show(string.Format(time.ToString()), "Current time instant", MessageBoxButtons.OK, MessageBoxIcon.Error);
-
+                _environment = new SimpleRLEnvironment(robotName);
+                TxMessageBox.Show(
+                    "RL server started. Now run the Python script.",
+                    "Server Status",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
-            //player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(robot_resource.player_TimeIntervalReached);
-
+            catch (Exception ex)
+            {
+                TxMessageBox.Show(
+                    $"Failed to start RL server:\n{ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
         }
     }
 }
