@@ -4,12 +4,14 @@ using System.Windows.Forms;
 using Tecnomatix.Engineering;
 using Tecnomatix.Engineering.Plc;
 using System.Collections;
+using EngineeringInternalExtension;
+using Tecnomatix.Engineering.ModelObjects;
 
 namespace ProcessSimulateSnippets
 {
     public class TxResources
     {
-        // ------------------------------- From snippets to methods
+        // ------------------------------- From 'snippets' to methods
         public void PlaceResource(string resource_name, double[] translation, double[] rotation)
         {
             // Get the instance
@@ -81,7 +83,7 @@ namespace ProcessSimulateSnippets
             // Move the tool to the station 
             PlaceResourceAccordingToFrame(tool_name, station_name);
 
-            // Put TCPF back in the robot flange
+            // Put TCPF back in the robot flange (called "TOOLFRAME")
             SetTCP(robot_name, "TOOLFRAME");
             TxApplication.RefreshDisplay();
         }
@@ -294,6 +296,90 @@ namespace ProcessSimulateSnippets
             double detJJt = CalculateDeterminant(JJt);
             double w = Math.Sqrt(Math.Abs(detJJt));
             TxMessageBox.Show("Yoshikawa Manipulability Index: w = sqrt(det(J*Jt) = " + w.ToString("G6"), "Name", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // Create compound operation 
+        public void CreateCompOp(string comp_op_name)
+        {
+            // Create the compound operation and save it in a variable
+            TxCompoundOperationCreationData dat = new TxCompoundOperationCreationData(comp_op_name);
+            TxApplication.ActiveDocument.OperationRoot.CreateCompoundOperation(dat);
+
+            // Refresh the display
+            TxApplication.RefreshDisplay();
+        }
+
+        // Add an operation to a compound operation
+        public void AddToCompound(string comp_op_name, string op_to_add, double starting_time)
+        {
+            // Find the compound operation by name
+            TxObjectList operations = TxApplication.ActiveDocument.GetObjectsByName(comp_op_name);
+            var comp_op = operations[0] as TxCompoundOperation;
+
+            // Find the operation to be added by name
+            TxObjectList OpToAdd = TxApplication.ActiveDocument.GetObjectsByName(op_to_add);
+            var op_to_add_obj = OpToAdd[0] as ITxObject;
+            var op_to_add_op = OpToAdd[0] as ITxOperation;
+
+            // Add to the compound operation
+            comp_op.AddObject(op_to_add_obj);
+            comp_op.SetChildOperationRelativeStartTime(op_to_add_op, starting_time);
+
+            // Refresh the display
+            TxApplication.RefreshDisplay();
+        }
+
+        // Create Human task => This must be fixed
+        public void CreateHumanOp(string op_name)
+        {
+            // Initialization variables for the pick and place 	
+            TxHumanTsbSimulationOperation op = null;
+            TxHumanTSBTaskCreationDataEx taskCreationData = new TxHumanTSBTaskCreationDataEx();
+
+            // Get the human
+            TxObjectList humans = TxApplication.ActiveDocument.GetObjectsByName("Jack");
+            TxHuman human = humans[0] as TxHuman;
+
+            // Important: these informations are FUNDAMENTAL to not make the script crash
+            TxObjectList cube_pick = TxApplication.ActiveSelection.GetItems();
+            cube_pick = TxApplication.ActiveDocument.GetObjectsByName("Crate_1");
+            var component = cube_pick[0] as ITxLocatableObject;
+
+            TxObjectList ref_frame_cube_place = TxApplication.ActiveSelection.GetItems();
+            ref_frame_cube_place = TxApplication.ActiveDocument.GetObjectsByName("crate_top_on_line_station");
+            var frame_cube_place = ref_frame_cube_place[0] as ITxLocatableObject;
+            var target_place = new TxTransformation(frame_cube_place.AbsoluteLocation);
+            var position_place = new TxTransformation(component.AbsoluteLocation);
+            position_place.Translation = new TxVector(target_place[0, 3], target_place[1, 3], target_place[2, 3]);
+            position_place.RotationRPY_ZYX = target_place.RotationRPY_ZYX;
+
+            // Create the simulation  		
+            op = TxHumanTSBSimulationUtilsEx.CreateSimulation(op_name);
+            op.SetInitialContext();
+
+            // Fill all the fields: without some of these, the script crashes
+            taskCreationData.PrimaryObject = component;
+            taskCreationData.TargetLocation = position_place;
+            taskCreationData.Human = human;
+            taskCreationData.TaskType = TsbTaskType.HUMAN_Wait;
+            taskCreationData.TaskDuration = 3.0; // seconds
+            TxHumanTsbTaskOperation tsbPoseTaskInt = op.CreateTask(taskCreationData);
+            op.ApplyTask(tsbPoseTaskInt, 1);
+            TxApplication.RefreshDisplay();
+
+            // Make modifications effective
+            //op.ForceResimulation();
+        }
+
+        public void player_TimeIntervalReached(object sender, TxSimulationPlayer_TimeIntervalReachedEventArgs args)
+        {
+
+            //TxMessageBox.Show(string.Format(args.CurrentTime.ToString()), "Current time instant", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            if (Math.Abs(args.CurrentTime - 1.0) < 1e-6)
+            {
+                AddToCompound("complete_op", "Human_task_2", 3.0);
+                TxApplication.RefreshDisplay();
+            }
         }
 
         // ------------------------------- Auxiliary methods

@@ -36,6 +36,7 @@ namespace ProcessSimulateSnippets
 
             double[] translation = new double[] { 200.0, 0.0, 0.0 };
             double[] rotation = new double[] { 0.0, 0.0, 0.0 };
+            // double[] joint_values = new double[] { -0.06409666151040447, 0.26179096555220205, 0.5575963904686277, -0.003833670843588153, 0.813862761497515, -0.022435109845964803 };
             double[] joint_values = new double[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
             bool invisible = false;
             double device_pos = 1400; 
@@ -46,16 +47,16 @@ namespace ProcessSimulateSnippets
             TxResources line_resource = new TxResources();
             //robot_resource.PlaceResource("GoFa12", translation, rotation);
             //robot_resource.SetTCP("GoFa12", "TCPF_crate"); //TCPF_crate, TOOLFRAME
-            robot_resource.UnMountToolGripper("GoFa12", "Crate_gripper", "crate_tool_station");
-            //robot_resource.MountToolGripper("GoFa12", "Crate_gripper", "tool_holder_offset", "BASEFRAME_crate", "TCPF_crate");
+            //robot_resource.UnMountToolGripper("GoFa12", "Crate_gripper", "crate_tool_station");
+            robot_resource.MountToolGripper("GoFa12", "Crate_gripper", "tool_holder_offset", "BASEFRAME_crate", "TCPF_crate");
             //robot_resource.DisplayMountedTools("GoFa12");
             //robot_resource.ImposeRobotConfig("GoFa12", "fr6");
             //robot_resource.SetJointValue("GoFa12", joint_values);
-            //item_resource.ChangeVisibility("YAOSC_cube", invisible);
+            //item_resource.ChangeVisibility("Crate_1", invisible);
             //line_resource.CreateDevicePose("Line", device_pos, "TestPose");
             //robot_resource.ComputeJacobian();
-            //robot_resource.PlaceResourceAccordingToFrame("Crate_1", "crate_top_on_slider_station");
-
+            //robot_resource.PlaceResourceAccordingToFrame("Crate_1", "crate_low_on_line_station");
+           
         }
     }
 }
