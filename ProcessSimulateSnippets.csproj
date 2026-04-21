@@ -67,7 +67,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Class2.cs" />
+    <Compile Include="RLEnvironment.cs" />
     <Compile Include="RLCmd.cs" />
     <Compile Include="SocketCmd.cs" />
     <Compile Include="SocketManager.cs" />

@@ -30,7 +30,7 @@ namespace DemoRL
     ///
     /// Done: true when the robot is within 10mm of the target
     /// </summary>
-    public class SimpleRLEnvironment : IDisposable
+    public class RLEnvironment : IDisposable
     {
         // === CONFIGURATION ===
         private const int PORT = 8580;
@@ -55,7 +55,7 @@ namespace DemoRL
         // === EPISODE STATE ===
         private int stepCount;
 
-        public SimpleRLEnvironment(string robotName)
+        public RLEnvironment(string robotName)
         {
             // 1. Find the robot in the scene
             var objects = TxApplication.ActiveDocument.GetObjectsByName(robotName);

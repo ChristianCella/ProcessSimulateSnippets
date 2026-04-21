@@ -10,7 +10,7 @@ namespace DemoRL
     /// </summary>
     public class RLCmd : TxButtonCommand
     {
-        private SimpleRLEnvironment _environment;
+        private RLEnvironment _environment;
 
         public override string Category => "RL Demo";
         public override string Name => "Start RL Server";
@@ -27,7 +27,7 @@ namespace DemoRL
                 // ===================================================
                 string robotName = "GoFa12";
 
-                _environment = new SimpleRLEnvironment(robotName);
+                _environment = new RLEnvironment(robotName);
                 TxMessageBox.Show(
                     "RL server started. Now run the Python script.",
                     "Server Status",
