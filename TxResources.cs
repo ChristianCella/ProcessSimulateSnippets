@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Forms;
 using Tecnomatix.Engineering;
 using Tecnomatix.Engineering.Plc;
+using Tecnomatix.Engineering.Olp;
 using System.Collections;
 using EngineeringInternalExtension;
 using Tecnomatix.Engineering.ModelObjects;
@@ -107,6 +108,7 @@ namespace ProcessSimulateSnippets
             TxMessageBox.Show(message, "Mounted Tools", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
+        // Impose a specific joint configuration to the robot
         public void SetJointValue(string resource_name, double[] joint_values)
         {
             var logic_resource = GetLogicResource(resource_name);
@@ -382,6 +384,274 @@ namespace ProcessSimulateSnippets
             }
         }
 
+        // Pick&Place
+        public TxContinuousRoboticOperation PP_op(string robot_name, string gripper_name, string pick_frame_name, string place_frame_name, string op_name, double offset)
+        {
+            // Get the robot
+            var robot = GetLocatableResource(robot_name);
+            var rob = robot as TxRobot;
+
+            // Get the pick and place frames
+            var pick_fr = GetLocatableResource(pick_frame_name);
+            var place_fr = GetLocatableResource(place_frame_name);
+
+            // Create the new operation    	
+            TxContinuousRoboticOperationCreationData data = new TxContinuousRoboticOperationCreationData(op_name);
+            TxApplication.ActiveDocument.OperationRoot.CreateContinuousRoboticOperation(data);
+            TxObjectList allOps = TxApplication.ActiveDocument.GetObjectsByName(op_name);
+            TxContinuousRoboticOperation MyOp = allOps[0] as TxContinuousRoboticOperation;
+
+            // Create all the necessary points       
+            TxRoboticViaLocationOperationCreationData Point1 = new TxRoboticViaLocationOperationCreationData();
+            Point1.Name = "point1";
+            TxRoboticViaLocationOperationCreationData Point2 = new TxRoboticViaLocationOperationCreationData();
+            Point2.Name = "point2";
+            TxRoboticViaLocationOperationCreationData Point3 = new TxRoboticViaLocationOperationCreationData();
+            Point3.Name = "point3";
+            TxRoboticViaLocationOperationCreationData Point4 = new TxRoboticViaLocationOperationCreationData();
+            Point4.Name = "point4";
+            TxRoboticViaLocationOperationCreationData Point5 = new TxRoboticViaLocationOperationCreationData();
+            Point5.Name = "point5";
+            TxRoboticViaLocationOperationCreationData Point6 = new TxRoboticViaLocationOperationCreationData();
+            Point6.Name = "point6";
+            TxRoboticViaLocationOperationCreationData Point7 = new TxRoboticViaLocationOperationCreationData();
+            Point7.Name = "point7";
+            TxRoboticViaLocationOperationCreationData Point8 = new TxRoboticViaLocationOperationCreationData();
+            Point8.Name = "point8";
+
+            TxRoboticViaLocationOperation FirstPoint = MyOp.CreateRoboticViaLocationOperation(Point1);
+            TxRoboticViaLocationOperation SecondPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point2, FirstPoint);
+            TxRoboticViaLocationOperation ThirdPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point3, SecondPoint);
+            TxRoboticViaLocationOperation FourthPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point4, ThirdPoint);
+            TxRoboticViaLocationOperation FifthPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point5, FourthPoint);
+            TxRoboticViaLocationOperation SixthPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point6, FifthPoint);
+            TxRoboticViaLocationOperation SeventhPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point7, SixthPoint);
+            TxRoboticViaLocationOperation EigthPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point8, SeventhPoint);
+
+            // Start and end points
+            TxTransformation tcp_pos = rob.TCPF.AbsoluteLocation;
+            FirstPoint.AbsoluteLocation = new TxTransformation(tcp_pos);
+            EigthPoint.AbsoluteLocation = new TxTransformation(tcp_pos);
+
+            // Pick and Place points
+            TxTransformation pick_pos = pick_fr.AbsoluteLocation;
+            TxTransformation place_pos = place_fr.AbsoluteLocation;
+            ThirdPoint.AbsoluteLocation = new TxTransformation(pick_pos);
+            SixthPoint.AbsoluteLocation = new TxTransformation(place_pos);
+
+            // Pre/post pick
+            SecondPoint.AbsoluteLocation = ThirdPoint.AbsoluteLocation;
+            var pose_point2 = new TxTransformation(SecondPoint.AbsoluteLocation);
+            pose_point2.Translation = new TxVector(pose_point2.Translation.X, pose_point2.Translation.Y, pose_point2.Translation.Z + offset);
+            SecondPoint.AbsoluteLocation = pose_point2;
+            FourthPoint.AbsoluteLocation = SecondPoint.AbsoluteLocation;
+
+            // Pre/post place
+            FifthPoint.AbsoluteLocation = SixthPoint.AbsoluteLocation;
+            var pose_point5 = new TxTransformation(FifthPoint.AbsoluteLocation);
+            pose_point5.Translation = new TxVector(pose_point5.Translation.X, pose_point5.Translation.Y, pose_point5.Translation.Z + offset);
+            FifthPoint.AbsoluteLocation = pose_point5;
+            SeventhPoint.AbsoluteLocation = FifthPoint.AbsoluteLocation;
+
+            // Setup the robot controller
+            MyOp.Robot = rob;
+            TxTypeFilter filter = new TxTypeFilter(typeof(TxRoboticViaLocationOperation));
+            TxObjectList points = MyOp.GetAllDescendants(filter);
+            TxOlpControllerUtilities ControllerUtils = new TxOlpControllerUtilities();
+
+            ITxOlpRobotControllerParametersHandler paramHandler = (ITxOlpRobotControllerParametersHandler)
+            ControllerUtils.GetInterfaceImplementationFromController(rob.Controller.Name,
+            typeof(ITxOlpRobotControllerParametersHandler), typeof(TxRobotSimulationControllerAttribute),
+            "ControllerName");
+
+            for (int ii = 0; ii < points.Count; ii++)
+            {
+                SetWaypointValues(points[ii].Name.ToString(), paramHandler, gripper_name);
+            }
+
+            // OLP command for attaching/detaching the obejct
+            CloseGripper(points[2].Name.ToString(), gripper_name);
+            OpenGripper(points[5].Name.ToString(), gripper_name);
+
+            // Return back the operation to be simulated
+            return MyOp;
+
+        }
+
+        public void CloseGripper(string point_name, string gripper_name)
+        {
+            // Save the second point to close the gripper		
+            TxRoboticViaLocationOperation Waypoint = TxApplication.ActiveDocument.
+            GetObjectsByName(point_name)[0] as TxRoboticViaLocationOperation;
+
+            // Save the gripper "Camozzi gripper" 	
+            ITxObject Gripper = TxApplication.ActiveDocument.
+            GetObjectsByName(gripper_name)[0] as TxGripper;
+
+            // Save the pose "Gripper Closed"  		
+            ITxObject Pose = TxApplication.ActiveDocument.
+            GetObjectsByName("CLOSE_" + gripper_name)[0] as TxPose;
+
+            // Save the reference frame of the gripper 		
+            ITxObject tGripper = TxApplication.ActiveDocument.
+            GetObjectsByName("TCPF_" + gripper_name)[0] as TxFrame;
+
+            // Create an array called "elements" and the command to be written in it
+            ArrayList elements1 = new ArrayList();
+            ArrayList elements2 = new ArrayList();
+            ArrayList elements3 = new ArrayList();
+            ArrayList elements4 = new ArrayList();
+            ArrayList elements5 = new ArrayList();
+
+            var myCmd1 = new TxRoboticCompositeCommandStringElement("# Destination");
+            var myCmd11 = new TxRoboticCompositeCommandTxObjectElement(Gripper);
+
+            var myCmd2 = new TxRoboticCompositeCommandStringElement("# Drive");
+            var myCmd21 = new TxRoboticCompositeCommandTxObjectElement(Pose);
+
+            var myCmd3 = new TxRoboticCompositeCommandStringElement("# Destination");
+            var myCmd31 = new TxRoboticCompositeCommandTxObjectElement(Gripper);
+
+            var myCmd4 = new TxRoboticCompositeCommandStringElement("# WaitDevice");
+            var myCmd41 = new TxRoboticCompositeCommandTxObjectElement(Pose);
+
+            var myCmd5 = new TxRoboticCompositeCommandStringElement("# Grip");
+            var myCmd51 = new TxRoboticCompositeCommandTxObjectElement(tGripper);
+
+            // First line of command	
+            elements1.Add(myCmd1);
+            elements1.Add(myCmd11);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData1 =
+            new TxRoboticCompositeCommandCreationData(elements1);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData1);
+
+            // Second line of command
+            elements2.Add(myCmd2);
+            elements2.Add(myCmd21);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData2 =
+            new TxRoboticCompositeCommandCreationData(elements2);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData2);
+
+            // Third line of command
+            elements3.Add(myCmd3);
+            elements3.Add(myCmd31);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData3 =
+            new TxRoboticCompositeCommandCreationData(elements3);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData3);
+
+            // Fourth line of command
+            elements4.Add(myCmd4);
+            elements4.Add(myCmd41);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData4 =
+            new TxRoboticCompositeCommandCreationData(elements4);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData4);
+
+            // Fifth line of command	
+            elements5.Add(myCmd5);
+            elements5.Add(myCmd51);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData5 =
+            new TxRoboticCompositeCommandCreationData(elements5);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData5);
+
+        }
+
+        public void OpenGripper(string point_name, string gripper_name)
+        {
+            // Save the second point to close the gripper		
+            TxRoboticViaLocationOperation Waypoint = TxApplication.ActiveDocument.
+            GetObjectsByName(point_name)[0] as TxRoboticViaLocationOperation;
+
+            // Save the gripper "Camozzi gripper" 	
+            ITxObject Gripper = TxApplication.ActiveDocument.
+            GetObjectsByName(gripper_name)[0] as TxGripper;
+
+            // Save the pose "Gripper Closed"  		
+            ITxObject Pose = TxApplication.ActiveDocument.
+            GetObjectsByName("OPEN_" + gripper_name)[0] as TxPose;
+
+            // Save the reference frame of the gripper 		
+            ITxObject tGripper = TxApplication.ActiveDocument.
+            GetObjectsByName("TCPF_" + gripper_name)[0] as TxFrame;
+
+            // Create an array called "elements" and the command to be written in it
+            ArrayList elements1 = new ArrayList();
+            ArrayList elements2 = new ArrayList();
+            ArrayList elements3 = new ArrayList();
+            ArrayList elements4 = new ArrayList();
+            ArrayList elements5 = new ArrayList();
+
+            var myCmd1 = new TxRoboticCompositeCommandStringElement("# Destination");
+            var myCmd11 = new TxRoboticCompositeCommandTxObjectElement(Gripper);
+
+            var myCmd2 = new TxRoboticCompositeCommandStringElement("# Drive");
+            var myCmd21 = new TxRoboticCompositeCommandTxObjectElement(Pose);
+
+            var myCmd3 = new TxRoboticCompositeCommandStringElement("# Destination");
+            var myCmd31 = new TxRoboticCompositeCommandTxObjectElement(Gripper);
+
+            var myCmd4 = new TxRoboticCompositeCommandStringElement("# WaitDevice");
+            var myCmd41 = new TxRoboticCompositeCommandTxObjectElement(Pose);
+
+            var myCmd5 = new TxRoboticCompositeCommandStringElement("# Release");
+            var myCmd51 = new TxRoboticCompositeCommandTxObjectElement(tGripper);
+
+            // First line of command	
+            elements1.Add(myCmd1);
+            elements1.Add(myCmd11);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData1 =
+            new TxRoboticCompositeCommandCreationData(elements1);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData1);
+
+            // Second line of command
+            elements2.Add(myCmd2);
+            elements2.Add(myCmd21);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData2 =
+            new TxRoboticCompositeCommandCreationData(elements2);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData2);
+
+            // Third line of command
+            elements3.Add(myCmd3);
+            elements3.Add(myCmd31);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData3 =
+            new TxRoboticCompositeCommandCreationData(elements3);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData3);
+
+            // Fourth line of command
+            elements4.Add(myCmd4);
+            elements4.Add(myCmd41);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData4 =
+            new TxRoboticCompositeCommandCreationData(elements4);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData4);
+
+            // Fifth line of command	
+            elements5.Add(myCmd5);
+            elements5.Add(myCmd51);
+
+            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData5 =
+            new TxRoboticCompositeCommandCreationData(elements5);
+
+            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData5);
+
+        }
+
         // ------------------------------- Auxiliary methods
 
         public ITxLocatableObject GetLocatableResource(string resource_name)
@@ -436,6 +706,26 @@ namespace ProcessSimulateSnippets
                 }
 
             return result;
+        }
+
+        // Specify the parameters of the waypoint
+        private static void SetWaypointValues(
+            string point_name,
+            ITxOlpRobotControllerParametersHandler paramHandler,
+            string gripper_name
+            )
+        {
+            // Get the waypoint by name
+            TxRoboticViaLocationOperation Point = TxApplication.ActiveDocument.
+            GetObjectsByName(point_name)[0] as TxRoboticViaLocationOperation;
+
+            // Set the robot characteristics for that point
+            paramHandler.OnComplexValueChanged("Tool Frame", "TCPF_" + gripper_name, Point);
+            paramHandler.OnComplexValueChanged("Motion Type", "PTP", Point);
+            paramHandler.OnComplexValueChanged("Speed", "100%", Point);
+            paramHandler.OnComplexValueChanged("Acc", "100%", Point);
+            paramHandler.OnComplexValueChanged("Zone", "fine", Point);
+
         }
 
         // Recursive determinant calculator (Laplace expansion)
