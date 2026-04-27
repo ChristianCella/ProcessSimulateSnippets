@@ -403,21 +403,21 @@ namespace ProcessSimulateSnippets
 
             // Create all the necessary points       
             TxRoboticViaLocationOperationCreationData Point1 = new TxRoboticViaLocationOperationCreationData();
-            Point1.Name = "point1";
+            Point1.Name = "point1_" + op_name;
             TxRoboticViaLocationOperationCreationData Point2 = new TxRoboticViaLocationOperationCreationData();
-            Point2.Name = "point2";
+            Point2.Name = "point2_" + op_name;
             TxRoboticViaLocationOperationCreationData Point3 = new TxRoboticViaLocationOperationCreationData();
-            Point3.Name = "point3";
+            Point3.Name = "point3_" + op_name;
             TxRoboticViaLocationOperationCreationData Point4 = new TxRoboticViaLocationOperationCreationData();
-            Point4.Name = "point4";
+            Point4.Name = "point4_" + op_name;
             TxRoboticViaLocationOperationCreationData Point5 = new TxRoboticViaLocationOperationCreationData();
-            Point5.Name = "point5";
+            Point5.Name = "point5_" + op_name;
             TxRoboticViaLocationOperationCreationData Point6 = new TxRoboticViaLocationOperationCreationData();
-            Point6.Name = "point6";
+            Point6.Name = "point6_" + op_name;
             TxRoboticViaLocationOperationCreationData Point7 = new TxRoboticViaLocationOperationCreationData();
-            Point7.Name = "point7";
+            Point7.Name = "point7_" + op_name;
             TxRoboticViaLocationOperationCreationData Point8 = new TxRoboticViaLocationOperationCreationData();
-            Point8.Name = "point8";
+            Point8.Name = "point8_" + op_name;
 
             TxRoboticViaLocationOperation FirstPoint = MyOp.CreateRoboticViaLocationOperation(Point1);
             TxRoboticViaLocationOperation SecondPoint = MyOp.CreateRoboticViaLocationOperationAfter(Point2, FirstPoint);
@@ -470,15 +470,15 @@ namespace ProcessSimulateSnippets
             }
 
             // OLP command for attaching/detaching the obejct
-            CloseGripper(points[2].Name.ToString(), gripper_name);
-            OpenGripper(points[5].Name.ToString(), gripper_name);
+            CommandGripper(points[2].Name.ToString(), gripper_name, "CLOSE");
+            CommandGripper(points[5].Name.ToString(), gripper_name, "OPEN");
 
             // Return back the operation to be simulated
             return MyOp;
 
         }
 
-        public void CloseGripper(string point_name, string gripper_name)
+        public void CommandGripper(string point_name, string gripper_name, string gripper_action)
         {
             // Save the second point to close the gripper		
             TxRoboticViaLocationOperation Waypoint = TxApplication.ActiveDocument.
@@ -490,7 +490,7 @@ namespace ProcessSimulateSnippets
 
             // Save the pose "Gripper Closed"  		
             ITxObject Pose = TxApplication.ActiveDocument.
-            GetObjectsByName("CLOSE_" + gripper_name)[0] as TxPose;
+            GetObjectsByName(gripper_action + "_" + gripper_name)[0] as TxPose;
 
             // Save the reference frame of the gripper 		
             ITxObject tGripper = TxApplication.ActiveDocument.
@@ -502,6 +502,9 @@ namespace ProcessSimulateSnippets
             ArrayList elements3 = new ArrayList();
             ArrayList elements4 = new ArrayList();
             ArrayList elements5 = new ArrayList();
+
+            TxRoboticCompositeCommandStringElement myCmd5 = null;
+            TxRoboticCompositeCommandTxObjectElement myCmd51 = null;
 
             var myCmd1 = new TxRoboticCompositeCommandStringElement("# Destination");
             var myCmd11 = new TxRoboticCompositeCommandTxObjectElement(Gripper);
@@ -515,95 +518,16 @@ namespace ProcessSimulateSnippets
             var myCmd4 = new TxRoboticCompositeCommandStringElement("# WaitDevice");
             var myCmd41 = new TxRoboticCompositeCommandTxObjectElement(Pose);
 
-            var myCmd5 = new TxRoboticCompositeCommandStringElement("# Grip");
-            var myCmd51 = new TxRoboticCompositeCommandTxObjectElement(tGripper);
-
-            // First line of command	
-            elements1.Add(myCmd1);
-            elements1.Add(myCmd11);
-
-            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData1 =
-            new TxRoboticCompositeCommandCreationData(elements1);
-
-            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData1);
-
-            // Second line of command
-            elements2.Add(myCmd2);
-            elements2.Add(myCmd21);
-
-            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData2 =
-            new TxRoboticCompositeCommandCreationData(elements2);
-
-            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData2);
-
-            // Third line of command
-            elements3.Add(myCmd3);
-            elements3.Add(myCmd31);
-
-            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData3 =
-            new TxRoboticCompositeCommandCreationData(elements3);
-
-            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData3);
-
-            // Fourth line of command
-            elements4.Add(myCmd4);
-            elements4.Add(myCmd41);
-
-            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData4 =
-            new TxRoboticCompositeCommandCreationData(elements4);
-
-            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData4);
-
-            // Fifth line of command	
-            elements5.Add(myCmd5);
-            elements5.Add(myCmd51);
-
-            TxRoboticCompositeCommandCreationData txRoboticCompositeCommandCreationData5 =
-            new TxRoboticCompositeCommandCreationData(elements5);
-
-            Waypoint.CreateCompositeCommand(txRoboticCompositeCommandCreationData5);
-
-        }
-
-        public void OpenGripper(string point_name, string gripper_name)
-        {
-            // Save the second point to close the gripper		
-            TxRoboticViaLocationOperation Waypoint = TxApplication.ActiveDocument.
-            GetObjectsByName(point_name)[0] as TxRoboticViaLocationOperation;
-
-            // Save the gripper "Camozzi gripper" 	
-            ITxObject Gripper = TxApplication.ActiveDocument.
-            GetObjectsByName(gripper_name)[0] as TxGripper;
-
-            // Save the pose "Gripper Closed"  		
-            ITxObject Pose = TxApplication.ActiveDocument.
-            GetObjectsByName("OPEN_" + gripper_name)[0] as TxPose;
-
-            // Save the reference frame of the gripper 		
-            ITxObject tGripper = TxApplication.ActiveDocument.
-            GetObjectsByName("TCPF_" + gripper_name)[0] as TxFrame;
-
-            // Create an array called "elements" and the command to be written in it
-            ArrayList elements1 = new ArrayList();
-            ArrayList elements2 = new ArrayList();
-            ArrayList elements3 = new ArrayList();
-            ArrayList elements4 = new ArrayList();
-            ArrayList elements5 = new ArrayList();
-
-            var myCmd1 = new TxRoboticCompositeCommandStringElement("# Destination");
-            var myCmd11 = new TxRoboticCompositeCommandTxObjectElement(Gripper);
-
-            var myCmd2 = new TxRoboticCompositeCommandStringElement("# Drive");
-            var myCmd21 = new TxRoboticCompositeCommandTxObjectElement(Pose);
-
-            var myCmd3 = new TxRoboticCompositeCommandStringElement("# Destination");
-            var myCmd31 = new TxRoboticCompositeCommandTxObjectElement(Gripper);
-
-            var myCmd4 = new TxRoboticCompositeCommandStringElement("# WaitDevice");
-            var myCmd41 = new TxRoboticCompositeCommandTxObjectElement(Pose);
-
-            var myCmd5 = new TxRoboticCompositeCommandStringElement("# Release");
-            var myCmd51 = new TxRoboticCompositeCommandTxObjectElement(tGripper);
+            if (gripper_action == "CLOSE")
+            {
+                myCmd5 = new TxRoboticCompositeCommandStringElement("# Grip");
+                myCmd51 = new TxRoboticCompositeCommandTxObjectElement(tGripper);
+            }
+            else 
+            {
+                myCmd5 = new TxRoboticCompositeCommandStringElement("# Release");
+                myCmd51 = new TxRoboticCompositeCommandTxObjectElement(tGripper);
+            }
 
             // First line of command	
             elements1.Add(myCmd1);
