@@ -185,6 +185,45 @@ namespace ProcessSimulateSnippets
             
         }
 
+        static TxPoseData ComputeBestIK(string robot_name, string frame_name)
+        {
+            // Compute IK
+            TxRoboticViaLocationOperation target_frame = TxApplication.ActiveDocument.GetObjectsByName(frame_name)[0] as TxRoboticViaLocationOperation;
+            TxRobotInverseData inv = new TxRobotInverseData(target_frame.AbsoluteLocation);
+
+            // Get the robot
+            var robot = GetLocatableResource(robot_name);
+            var rob = robot as TxRobot;
+
+            // Get the robot joint values in the home config.
+            TxPose homePose = rob.GetPoseByName("PP_home");
+            var home_pose = homePose.PoseData.JointValues;
+
+            // Compute the IK
+            var poses = rob.CalcInverseSolutions(inv);
+            double bestCost = double.MaxValue;
+            TxPoseData bestPose = null;
+
+            foreach (TxPoseData pose in poses)
+            {
+                // Get joints 2 to 6 from this solution
+                double totalDisplacement = 0.0;
+                for (int i = 1; i < 6; i++)
+                {
+                    double diff = Math.Abs((double)pose.JointValues[i] - (double)home_pose[i]);
+                    totalDisplacement += diff;
+                }
+
+                if (totalDisplacement < bestCost)
+                {
+                    bestCost = totalDisplacement;
+                    bestPose = pose;
+                }
+            }
+
+            return bestPose;
+        }
+
         // Make an object visible or invisible
         public void ChangeVisibility(string resource_name, bool invisible)
         {
@@ -218,6 +257,36 @@ namespace ProcessSimulateSnippets
             openposeData.JointValues = openarraylist;
             TxPoseCreationData NewPose = new TxPoseCreationData(pose_name, openposeData);
             TxPose new_base_pose = device.CreatePose(NewPose);
+        }
+
+        public TxDeviceOperation CreateDeviceOp(string device_name, string op_name, string final_pose, double op_duration)
+        {
+            // Get the line device
+            var dev = GetLocatableResource(device_name);
+            TxDevice device = dev as TxDevice;
+
+            // Get the start pose
+            //TxObjectList start_poses = TxApplication.ActiveDocument.GetObjectsByName("MIDDLE");
+            //var start_pose = start_poses[0] as TxPose;
+
+            // Get the final pose
+            TxObjectList end_poses = TxApplication.ActiveDocument.GetObjectsByName(final_pose);
+            var end_pose = end_poses[0] as TxPose;
+
+            // Get the device by name
+            TxDeviceOperationCreationData data = new TxDeviceOperationCreationData();
+            data.Duration = op_duration;
+            data.Name = op_name;
+            TxApplication.ActiveDocument.OperationRoot.CreateDeviceOperation(data);
+
+            TxObjectList operations = TxApplication.ActiveDocument.GetObjectsByName(data.Name);
+            var MyOp = operations[0] as TxDeviceOperation;
+
+            MyOp.Device = device;
+            //MyOp.SourcePose = start_pose; 
+            MyOp.TargetPose = end_pose;
+
+            return MyOp;
         }
 
         // Compute the Jacobian of the robot
@@ -330,6 +399,7 @@ namespace ProcessSimulateSnippets
             // Refresh the display
             TxApplication.RefreshDisplay();
         }
+        
 
         // Create Human task => This must be fixed
         public void CreateHumanOp(string op_name)
@@ -373,15 +443,10 @@ namespace ProcessSimulateSnippets
             //op.ForceResimulation();
         }
 
+        // Proxy method
         public void player_TimeIntervalReached(object sender, TxSimulationPlayer_TimeIntervalReachedEventArgs args)
         {
-
-            //TxMessageBox.Show(string.Format(args.CurrentTime.ToString()), "Current time instant", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            if (Math.Abs(args.CurrentTime - 1.0) < 1e-6)
-            {
-                AddToCompound("complete_op", "Human_task_2", 3.0);
-                TxApplication.RefreshDisplay();
-            }
+            System.Diagnostics.Trace.WriteLine("Current simulation time: " + args.CurrentTime);
         }
 
         // Pick&Place
@@ -391,9 +456,13 @@ namespace ProcessSimulateSnippets
             var robot = GetLocatableResource(robot_name);
             var rob = robot as TxRobot;
 
+            //TxMessageBox.Show(rob.Name.ToString(), "Robot name", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
             // Get the pick and place frames
             var pick_fr = GetLocatableResource(pick_frame_name);
+            //TxMessageBox.Show(pick_fr.Name.ToString(), "Pick frame name", MessageBoxButtons.OK, MessageBoxIcon.Error);
             var place_fr = GetLocatableResource(place_frame_name);
+            //TxMessageBox.Show(place_fr.Name.ToString(), "Place frame name", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
             // Create the new operation    	
             TxContinuousRoboticOperationCreationData data = new TxContinuousRoboticOperationCreationData(op_name);
@@ -466,7 +535,7 @@ namespace ProcessSimulateSnippets
 
             for (int ii = 0; ii < points.Count; ii++)
             {
-                SetWaypointValues(points[ii].Name.ToString(), paramHandler, gripper_name);
+                SetWaypointValues(ii, robot_name, points[ii].Name.ToString(), paramHandler, gripper_name);
             }
 
             // OLP command for attaching/detaching the obejct
@@ -576,9 +645,30 @@ namespace ProcessSimulateSnippets
 
         }
 
+        public TxSnapshot CreateSnap(string snap_name)
+        {
+            // Create the snapshot
+            TxSnapshotCreationData creationData = new TxSnapshotCreationData();
+            creationData.Name = snap_name;
+            TxPhysicalRoot cell = TxApplication.ActiveDocument.PhysicalRoot;
+            TxSnapshot txSnapshot = cell.CreateSnapshot(creationData);    
+            return txSnapshot;
+        }
+
+        public TxApplySnapshotParams CreateSnapPar()
+        {
+            TxApplySnapshotParams snapParam = new TxApplySnapshotParams();
+            snapParam.ObjectsLocation = true;
+            snapParam.ObjectsVisibility = true;
+            snapParam.ObjectsAttachments = true;
+            snapParam.DevicePoses = true;
+            return snapParam;
+        }
+
+
         // ------------------------------- Auxiliary methods
 
-        public ITxLocatableObject GetLocatableResource(string resource_name)
+        static ITxLocatableObject GetLocatableResource(string resource_name)
         {
             TxObjectList selectedObjects = TxApplication.ActiveSelection.GetItems();
             selectedObjects = TxApplication.ActiveDocument.GetObjectsByName(resource_name);
@@ -634,6 +724,8 @@ namespace ProcessSimulateSnippets
 
         // Specify the parameters of the waypoint
         private static void SetWaypointValues(
+            int idx,
+            string robot_name,
             string point_name,
             ITxOlpRobotControllerParametersHandler paramHandler,
             string gripper_name
@@ -643,9 +735,34 @@ namespace ProcessSimulateSnippets
             TxRoboticViaLocationOperation Point = TxApplication.ActiveDocument.
             GetObjectsByName(point_name)[0] as TxRoboticViaLocationOperation;
 
+            if ((idx == 0) || (idx == 7)) // Make sure the robot starts and ends with the same 'home' config.
+            {
+                paramHandler.OnComplexValueChanged("Motion Type", "PTP_AXIS PP_home", Point);
+            }
+            else if (idx == 4) // Problematic point sometimes
+            {
+                // Get the robot
+                var robot = GetLocatableResource(robot_name);
+                var rob = robot as TxRobot;
+
+                // Get the best pose
+                TxPoseData new_config = ComputeBestIK(robot_name, point_name);
+                TxPoseCreationData NewPose = new TxPoseCreationData("Proxy", new_config);
+                rob.CreatePose(NewPose);
+                paramHandler.OnComplexValueChanged("Motion Type", "PTP_AXIS Proxy", Point);
+
+                // Now cancel the pose
+                TxPose proxyPose = rob.GetPoseByName("Proxy");
+                proxyPose.Delete();
+
+            }
+            else
+            {
+                paramHandler.OnComplexValueChanged("Motion Type", "PTP", Point);
+            }
+
             // Set the robot characteristics for that point
             paramHandler.OnComplexValueChanged("Tool Frame", "TCPF_" + gripper_name, Point);
-            paramHandler.OnComplexValueChanged("Motion Type", "PTP", Point);
             paramHandler.OnComplexValueChanged("Speed", "100%", Point);
             paramHandler.OnComplexValueChanged("Acc", "100%", Point);
             paramHandler.OnComplexValueChanged("Zone", "fine", Point);

@@ -67,6 +67,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CommunicationManager.cs" />
+    <Compile Include="DataModels.cs" />
+    <Compile Include="RequestHandler.cs" />
     <Compile Include="RLEnvironment.cs" />
     <Compile Include="RLCmd.cs" />
     <Compile Include="SocketCmd.cs" />

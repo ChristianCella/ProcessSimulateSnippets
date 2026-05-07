@@ -2,12 +2,8 @@
 using System.Windows.Forms;
 using Tecnomatix.Engineering;
 
-namespace DemoRL
+namespace ProcessSimulateSnippets
 {
-    /// <summary>
-    /// Button that appears in Process Simulate.
-    /// Click it to start the RL server, then run the Python script.
-    /// </summary>
     public class RLCmd : TxButtonCommand
     {
         private RLEnvironment _environment;
@@ -17,17 +13,13 @@ namespace DemoRL
 
         public override void Execute(object cmdParams)
         {
-            // Close any previous server still running
             _environment?.Dispose();
 
             try
             {
-                // ===================================================
-                // CHANGE THIS to match your robot's name in the scene
-                // ===================================================
                 string robotName = "GoFa12";
-
-                _environment = new RLEnvironment(robotName);
+                string lineName = "Line";
+                _environment = new RLEnvironment(robotName, lineName);
                 TxMessageBox.Show(
                     "RL server started. Now run the Python script.",
                     "Server Status",
@@ -37,7 +29,7 @@ namespace DemoRL
             catch (Exception ex)
             {
                 TxMessageBox.Show(
-                    $"Failed to start RL server:\n{ex.Message}",
+                    $"Failed to start RL server:\n{ex}",
                     "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
