@@ -185,7 +185,7 @@ namespace ProcessSimulateSnippets
             
         }
 
-        static TxPoseData ComputeBestIK(string robot_name, string frame_name)
+        static TxPoseData ComputeBestIK(string robot_name, string frame_name, string home_pose_name)
         {
             // Compute IK
             TxRoboticViaLocationOperation target_frame = TxApplication.ActiveDocument.GetObjectsByName(frame_name)[0] as TxRoboticViaLocationOperation;
@@ -196,7 +196,7 @@ namespace ProcessSimulateSnippets
             var rob = robot as TxRobot;
 
             // Get the robot joint values in the home config.
-            TxPose homePose = rob.GetPoseByName("PP_home");
+            TxPose homePose = rob.GetPoseByName(home_pose_name);
             var home_pose = homePose.PoseData.JointValues;
 
             // Compute the IK
@@ -266,12 +266,40 @@ namespace ProcessSimulateSnippets
             TxDevice device = dev as TxDevice;
 
             // Get the start pose
-            //TxObjectList start_poses = TxApplication.ActiveDocument.GetObjectsByName("MIDDLE");
+            //TxObjectList start_poses = TxApplication.ActiveDocument.GetObjectsByName("PP_home");
             //var start_pose = start_poses[0] as TxPose;
 
             // Get the final pose
             TxObjectList end_poses = TxApplication.ActiveDocument.GetObjectsByName(final_pose);
             var end_pose = end_poses[0] as TxPose;
+
+            // Get the device by name
+            TxDeviceOperationCreationData data = new TxDeviceOperationCreationData();
+            data.Duration = op_duration;
+            data.Name = op_name;
+            TxApplication.ActiveDocument.OperationRoot.CreateDeviceOperation(data);
+
+            TxObjectList operations = TxApplication.ActiveDocument.GetObjectsByName(data.Name);
+            var MyOp = operations[0] as TxDeviceOperation;
+
+            MyOp.Device = device;
+            //MyOp.SourcePose = start_pose; 
+            MyOp.TargetPose = end_pose;
+
+            return MyOp;
+        }
+
+        public TxDeviceOperation HomeRobot(string device_name, string op_name, string final_pose, double op_duration)
+        {
+            // Get the line device
+            var dev = GetLocatableResource(device_name);
+            TxRobot device = dev as TxRobot;
+
+            // Get the final pose
+            TxObjectList end_poses = TxApplication.ActiveDocument.GetObjectsByName(final_pose);
+            var end_pose = end_poses[0] as TxPose;
+
+            System.Diagnostics.Trace.WriteLine($"The pose name is {end_pose.Name.ToString()}");
 
             // Get the device by name
             TxDeviceOperationCreationData data = new TxDeviceOperationCreationData();
@@ -450,7 +478,7 @@ namespace ProcessSimulateSnippets
         }
 
         // Pick&Place
-        public TxContinuousRoboticOperation PP_op(string robot_name, string gripper_name, string pick_frame_name, string place_frame_name, string op_name, double offset)
+        public TxContinuousRoboticOperation PP_op(string robot_name, string gripper_name, string pick_frame_name, string place_frame_name, string op_name, double offset, string home_pose_name, bool optimzie_config)
         {
             // Get the robot
             var robot = GetLocatableResource(robot_name);
@@ -535,7 +563,7 @@ namespace ProcessSimulateSnippets
 
             for (int ii = 0; ii < points.Count; ii++)
             {
-                SetWaypointValues(ii, robot_name, points[ii].Name.ToString(), paramHandler, gripper_name);
+                SetWaypointValues(ii, robot_name, points[ii].Name.ToString(), paramHandler, gripper_name, home_pose_name, optimzie_config);
             }
 
             // OLP command for attaching/detaching the obejct
@@ -728,7 +756,9 @@ namespace ProcessSimulateSnippets
             string robot_name,
             string point_name,
             ITxOlpRobotControllerParametersHandler paramHandler,
-            string gripper_name
+            string gripper_name,
+            string home_pose_name,
+            bool optimize_config
             )
         {
             // Get the waypoint by name
@@ -737,16 +767,16 @@ namespace ProcessSimulateSnippets
 
             if ((idx == 0) || (idx == 7)) // Make sure the robot starts and ends with the same 'home' config.
             {
-                paramHandler.OnComplexValueChanged("Motion Type", "PTP_AXIS PP_home", Point);
+                paramHandler.OnComplexValueChanged("Motion Type", "PTP_AXIS " + home_pose_name, Point);
             }
-            else if (idx == 4) // Problematic point sometimes
+            else if (idx == 4 && optimize_config == true) // Problematic point sometimes
             {
                 // Get the robot
                 var robot = GetLocatableResource(robot_name);
                 var rob = robot as TxRobot;
 
                 // Get the best pose
-                TxPoseData new_config = ComputeBestIK(robot_name, point_name);
+                TxPoseData new_config = ComputeBestIK(robot_name, point_name, home_pose_name);
                 TxPoseCreationData NewPose = new TxPoseCreationData("Proxy", new_config);
                 rob.CreatePose(NewPose);
                 paramHandler.OnComplexValueChanged("Motion Type", "PTP_AXIS Proxy", Point);

@@ -50,9 +50,9 @@ namespace ProcessSimulateSnippets
             TxResources robot_resource = new TxResources();
             TxResources line_resource = new TxResources();
             //robot_resource.PlaceResource("GoFa12", translation, rotation);
-            //robot_resource.SetTCP("GoFa12", "TCPF_Smart_gripper"); //TCPF_crate, TOOLFRAME
+            //robot_resource.SetTCP("GoFa12", "TCPF_Crate_gripper"); //TCPF_crate, TOOLFRAME
             //robot_resource.UnMountToolGripper("GoFa12", "Crate_gripper", "crate_tool_station");
-            robot_resource.MountToolGripper("GoFa12", "Crate_gripper", "tool_holder_offset", "BASEFRAME_Crate_gripper", "TCPF_Crate_gripper");
+            //robot_resource.MountToolGripper("GoFa12", "Crate_gripper", "tool_holder_offset", "BASEFRAME_Crate_gripper", "TCPF_Crate_gripper");
             //robot_resource.UnMountToolGripper("GoFa12", "Smart_gripper", "tool_station_Smart_gripper");
             //robot_resource.MountToolGripper("GoFa12", "Smart_gripper", "tool_holder_offset", "BASEFRAME_Smart_gripper", "TCPF_Smart_gripper");
             //robot_resource.DisplayMountedTools("GoFa12");
@@ -61,10 +61,11 @@ namespace ProcessSimulateSnippets
             //item_resource.ChangeVisibility("Type_A_box_cover_left_1", invisible);
             //line_resource.CreateDevicePose("Line", device_pos, "Crate_outfeed");
             //robot_resource.ComputeJacobian();
-            //robot_resource.PlaceResourceAccordingToFrame("Crate_3", "crate_low_on_slider_station");
+            //robot_resource.PlaceResourceAccordingToFrame("Crate_3", "crate_top_on_line_station");
             //TxDeviceOperation my_op = robot_resource.CreateDeviceOp("Line", "Op", "Crate_station");
+            //TxDeviceOperation my_op = robot_resource.HomeRobot("GoFa12", "Op", "Crate_home", 0.0);
 
-            //TxContinuousRoboticOperation myop = robot_resource.PP_op("GoFa12", "Smart_gripper", "pick_box_A_1", "crate_2_place1", "test_op", offset);        
+            TxContinuousRoboticOperation myop = robot_resource.PP_op("GoFa12", "Crate_gripper", "pick_top_crate_frame", "place_crate", "test_op", offset, "Crate_home", false);
             //TxSnapshot txSnapshot = robot_resource.CreateSnap("Initial_conditions");
             //TxApplySnapshotParams snapParam = robot_resource.CreateSnapPar();
             //txSnapshot.Apply(snapParam);
