@@ -16,7 +16,8 @@ ACTION_NAMES = {
     2: "Insert box into crate",
     3: "Change to Smart gripper",
     4: "Change to Crate gripper",
-    5 : "Put crates on the slider"
+    5: "Put crates on the slider",
+    6: "Action 6 - your description here" 
 }
 
 NUM_EPISODES = 3

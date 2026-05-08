@@ -27,9 +27,9 @@ class SimpleRobotEnv(gym.Env):
         self.port = port
         self.sock = None
 
-        self.action_space = gym.spaces.Discrete(6)
+        self.action_space = gym.spaces.Discrete(7)
         self.observation_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32
         )
 
         self.valid_action_mask = np.ones(self.action_space.n, dtype=bool)
