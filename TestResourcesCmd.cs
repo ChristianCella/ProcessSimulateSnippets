@@ -61,7 +61,7 @@ namespace ProcessSimulateSnippets
             //item_resource.ChangeVisibility("Type_A_box_cover_left_1", invisible);
             //line_resource.CreateDevicePose("Line", device_pos, "Crate_outfeed");
             //robot_resource.ComputeJacobian();
-            robot_resource.PlaceResourceAccordingToFrame("Pallet_pieces_A", "Pallet_A_table");
+            robot_resource.PlaceResourceAccordingToFrame("Type_A_box_right_1", "Box_A_2");
             //TxDeviceOperation my_op = robot_resource.CreateDeviceOp("Line", "Op", "Crate_station");
             //TxDeviceOperation my_op = robot_resource.HomeRobot("GoFa12", "Op", "Crate_home", 0.0);
 
