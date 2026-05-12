@@ -244,6 +244,18 @@ namespace ProcessSimulateSnippets
             TxApplication.RefreshDisplay();
         }
 
+        // Attach an object to another
+        public void AttachItem(string item_to_attach, string base_resource)
+        {
+            var resource_to_attach = GetLocatableResource(item_to_attach);
+
+            var resource_base = GetLocatableResource(base_resource);
+
+            resource_to_attach.AttachTo(resource_base);
+            TxApplication.RefreshDisplay();
+
+        }
+
         // Create a pose for a device (i.e. a line, NOT A ROBOT)
         public void CreateDevicePose(string device_name, double device_pos, string pose_name)
         {
@@ -698,10 +710,17 @@ namespace ProcessSimulateSnippets
 
         static ITxLocatableObject GetLocatableResource(string resource_name)
         {
-            TxObjectList selectedObjects = TxApplication.ActiveSelection.GetItems();
-            selectedObjects = TxApplication.ActiveDocument.GetObjectsByName(resource_name);
-            return selectedObjects[0] as ITxLocatableObject;
+            TxObjectList selectedObjects = TxApplication.ActiveDocument.GetObjectsByName(resource_name);
 
+            System.Diagnostics.Trace.WriteLine($"[RL] GetLocatableResource: searching for '{resource_name}', found {selectedObjects.Count} objects");
+
+            if (selectedObjects.Count == 0)
+            {
+                System.Diagnostics.Trace.WriteLine($"[RL] ERROR: Resource '{resource_name}' not found in scene!");
+                return null;
+            }
+
+            return selectedObjects[0] as ITxLocatableObject;
         }
 
         public ITxPlcLogicResource GetLogicResource(string resource_name)

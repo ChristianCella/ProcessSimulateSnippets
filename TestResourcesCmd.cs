@@ -65,7 +65,8 @@ namespace ProcessSimulateSnippets
             //TxDeviceOperation my_op = robot_resource.CreateDeviceOp("Line", "Op", "Crate_station");
             //TxDeviceOperation my_op = robot_resource.HomeRobot("GoFa12", "Op", "Crate_home", 0.0);
 
-            TxContinuousRoboticOperation myop = robot_resource.PP_op("GoFa12", "Crate_gripper", "pick_top_crate_frame", "place_crate", "test_op", offset, "Crate_home", false);
+            //TxContinuousRoboticOperation myop = robot_resource.PP_op("GoFa12", "Crate_gripper", "pick_top_crate_frame", "place_crate", "test_op", offset, "Crate_home", false);
+            robot_resource.AttachItem("Type_A_box_left_2", "crate_low_on_slider_station");
             //TxSnapshot txSnapshot = robot_resource.CreateSnap("Initial_conditions");
             //TxApplySnapshotParams snapParam = robot_resource.CreateSnapPar();
             //txSnapshot.Apply(snapParam);

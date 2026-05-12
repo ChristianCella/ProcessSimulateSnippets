@@ -1,25 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
 using Tecnomatix.Engineering;
+using System.Windows.Forms;
 
 namespace ProcessSimulateSnippets
 {
-
     public class RLEnvironment : IDisposable
     {
         // === DEBUG GUI ===
         private RLDebugPanel _debugPanel;
 
         // === CONFIGURATION ===
-        private const int NUM_ACTIONS = 7;
+        private const int NUM_ACTIONS = 9;
         private const int NUM_CRATES = 3;
-        private const int MAX_STEPS = 20;
+        private const int MAX_STEPS = 30;
         private const double OFFSET = 200.0;
-        private const double tool_change_duration = 15.0; // NOTE: change this to the real values
+        private const double tool_change_duration = 15.0;
 
         // Normalization constants
-        private const double MAX_RAIL_LENGTH = 3000.0;   // mm - adjust to your actual rail length
-        private const double MAX_EXPECTED_TIME = 300.0;  // seconds - adjust to your expected max episode time
+        private const double MAX_RAIL_LENGTH = 3000.0;
+        private const double MAX_EXPECTED_TIME = 500.0; // increased for longer episodes
 
         // Robot poses
         private const string pp_station = "PP_station";
@@ -27,11 +27,39 @@ namespace ProcessSimulateSnippets
         private const string tool_change_station = "Tool_change_station";
         private const string load_crates_station = "Load_crates_station";
         private const string unload_crates_station = "Unload_crate_station";
+        private const string unload_crate2_station = "Unload_crate_station"; 
 
         // Home poses
         private const string pp_home = "PP_home";
         private const string crate_home = "Crate_home";
         private const string tool_change_home = "Tool_change_home";
+
+        // Small boxes
+        private readonly List<string> small_boxes_A_1 = new List<string>
+        {
+            "Type_A_box_left_1",
+            "Type_A_box_right_1"
+        };
+
+        private readonly List<string> small_boxes_B_1 = new List<string>
+        {
+            "Type_B_box_left_1",
+            "Type_B_box_right_1"
+        };
+
+        // Pieces names
+        private readonly List<string> pieces_A_1 = new List<string>
+        {
+            "Piece_A_1",
+            "Piece_A_2"
+        };
+
+        private readonly List<string> pieces_B_1 = new List<string>
+        {
+            "Piece_B_1",
+            "Piece_B_2"
+        };
+
 
         // === SCENE OBJECTS ===
         private readonly TxRobot _robot;
@@ -54,17 +82,19 @@ namespace ProcessSimulateSnippets
         private readonly RequestHandler _handler;
 
         // === CRATE CONTENTS TRACKING ===
-        private int _boxesInCrate3TypeA = 0;  // Type A boxes inserted into crate 3
-        private int _boxesInCrate2TypeB = 0;  // Type B boxes inserted into crate 2
-        private const int MAX_BOXES_PER_CRATE = 2; // adjust to your actual crate capacity
+        private int _boxesInCrate3TypeA = 0;
+        private int _boxesInCrate2TypeB = 0;
+        private const int MAX_BOXES_PER_CRATE = 2;
 
         // === EPISODE STATE ===
         private int _stepCount;
         private bool _actionZeroDone;   // Type A pieces placed in box
         private bool _actionOneDone;    // Type B pieces placed in box
-        private bool _actionTwoDone;    // Box inserted into crate
+        private bool _actionTwoDone;    // Type A boxes inserted into crate 3
         private bool _actionFiveDone;   // Crates placed on slider
-        private bool _actionSixDone;
+        private bool _actionSixDone;    // Crate 3 removed from slider
+        private bool _actionSevenDone;  // Type B boxes inserted into crate 2
+        private bool _actionEightDone;  // Crate 2 removed from slider
         private double _totalRobotTime;
         private int _episodeId = 0;
         private string _currentGripper = "Crate_gripper";
@@ -81,13 +111,18 @@ namespace ProcessSimulateSnippets
         private readonly string _placeB2 = "Place_B_2";
         private readonly string _pickBoxA1 = "pick_box_A_1";
         private readonly string _pickBoxA2 = "pick_box_A_2";
+        private readonly string _pickBoxB1 = "pick_box_B_1"; 
+        private readonly string _pickBoxB2 = "pick_box_B_2";
         private readonly string _placeBox1Crate3 = "crate_3_place1";
         private readonly string _placeBox2Crate3 = "crate_3_place2";
+        private readonly string _placeBox1Crate2 = "crate_2_place1";
+        private readonly string _placeBox2Crate2 = "crate_2_place2"; 
         private readonly string _pickCrate3 = "pick_top_crate_frame";
         private readonly string _pickCrate2 = "pick_middle_crate_frame";
         private readonly string _pickCrate1 = "pick_low_crate_frame";
         private readonly string _placeCrates = "place_crate";
         private readonly string _crateLowOutfeed = "crate_low_on_table_outfeed";
+        private readonly string _crate2Outfeed = "crate_middle_on_table_outfeed"; 
         private readonly List<string> slider_frames = new List<string>
         {
             "crate_low_on_slider_station",
@@ -98,7 +133,6 @@ namespace ProcessSimulateSnippets
 
         public RLEnvironment(string robotName, string lineName)
         {
-            // 1. Find the robot
             var objects = TxApplication.ActiveDocument.GetObjectsByName(robotName);
             if (objects.Count == 0)
                 throw new Exception($"Robot '{robotName}' not found in the scene.");
@@ -106,7 +140,6 @@ namespace ProcessSimulateSnippets
             if (_robot == null)
                 throw new Exception($"'{robotName}' exists but is not a TxRobot.");
 
-            // 2. Find the line
             var objects_line = TxApplication.ActiveDocument.GetObjectsByName(lineName);
             if (objects_line.Count == 0)
                 throw new Exception($"Line '{lineName}' not found in the scene.");
@@ -114,25 +147,20 @@ namespace ProcessSimulateSnippets
             if (_line == null)
                 throw new Exception($"'{lineName}' exists but is not a TxDevice.");
 
-            // 3. Create resource helper
             _robotResource = new TxResources();
 
-            // 4. Take a snapshot of the initial scene
             _snapshot = _robotResource.CreateSnap("RL_Initial_Conditions");
             _snapParams = _robotResource.CreateSnapPar();
 
-            // 5. Setup simulation player
             _player = TxApplication.ActiveDocument.SimulationPlayer;
             _player.ResetToDefaultSetting();
             _player.AskUserForReset(false);
             _player.DoOnlyUnscheduledReset(true);
 
-            // 6. Start communication
             _communicator = new CommunicationManager("GymPort");
             _handler = new RequestHandler(this, _communicator);
             _communicator.StartListening(_handler);
 
-            // 7. Show debug panel
             _debugPanel = new RLDebugPanel();
             _debugPanel.Show();
 
@@ -147,37 +175,22 @@ namespace ProcessSimulateSnippets
         {
             System.Diagnostics.Trace.WriteLine("[RL] === RESET ===");
 
-            // Remove previously created robotic operations
             foreach (var op in _createdOps)
             {
-                try
-                {
-                    if (op != null)
-                        op.Delete();
-                }
+                try { if (op != null) op.Delete(); }
                 catch (Exception ex)
-                {
-                    System.Diagnostics.Trace.WriteLine($"[RL] Failed to delete op: {ex.Message}");
-                }
+                { System.Diagnostics.Trace.WriteLine($"[RL] Failed to delete op: {ex.Message}"); }
             }
             _createdOps.Clear();
 
-            // Remove previously created device operations
             foreach (var op in _created_deviceOps)
             {
-                try
-                {
-                    if (op != null)
-                        op.Delete();
-                }
+                try { if (op != null) op.Delete(); }
                 catch (Exception ex)
-                {
-                    System.Diagnostics.Trace.WriteLine($"[RL] Failed to delete op: {ex.Message}");
-                }
+                { System.Diagnostics.Trace.WriteLine($"[RL] Failed to delete op: {ex.Message}"); }
             }
             _created_deviceOps.Clear();
 
-            // Restore scene to initial state
             _snapshot.Apply(_snapParams);
             TxApplication.RefreshDisplay();
 
@@ -185,8 +198,11 @@ namespace ProcessSimulateSnippets
             _stepCount = 0;
             _actionZeroDone = false;
             _actionOneDone = false;
-            _actionTwoDone = false;   // NEW
+            _actionTwoDone = false;
             _actionFiveDone = false;
+            _actionSixDone = false;
+            _actionSevenDone = false;  // NEW
+            _actionEightDone = false;  // NEW
             _totalRobotTime = 0.0;
             _episodeId++;
             _currentGripper = "Crate_gripper";
@@ -194,15 +210,13 @@ namespace ProcessSimulateSnippets
             _available_places_on_slider[1] = 1;
             _available_places_on_slider[2] = 1;
             _boxesInCrate3TypeA = 0;
-            _boxesInCrate2TypeB = 0;
+            _boxesInCrate2TypeB = 0;  // reset properly now that it is used
 
-            // Reset player settings
             _player = TxApplication.ActiveDocument.SimulationPlayer;
             _player.ResetToDefaultSetting();
             _player.AskUserForReset(false);
             _player.DoOnlyUnscheduledReset(true);
 
-            // Update the debug panel
             _debugPanel.UpdateState(
                 _episodeId, _stepCount, -1, 0.0,
                 _currentGripper, _actionZeroDone, _actionOneDone, _actionFiveDone,
@@ -228,55 +242,79 @@ namespace ProcessSimulateSnippets
             bool truncated = false;
             double reward = 0.0;
 
-            // --- FEASIBILITY CHECKS (unchanged - these use the internal booleans) ---
-            // These are needed only when I do not use the masking mechanism of masked PPO
-            if (actionId == 0 && (_actionZeroDone || _currentGripper != "Smart_gripper"))
+            // Gripper state booleans - declared once at top for use in all checks
+            bool hasSmartGripper = _currentGripper == "Smart_gripper";
+            bool hasCrateGripper = _currentGripper == "Crate_gripper";
+
+            // --- FEASIBILITY CHECKS ---
+            if (actionId == 0 && (_actionZeroDone || !hasSmartGripper))
             {
                 UpdateDebug(0, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
-            if (actionId == 1 && (_actionOneDone || _currentGripper != "Smart_gripper"))
+            if (actionId == 1 && (_actionOneDone || !hasSmartGripper))
             {
                 UpdateDebug(1, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
-            if (actionId == 2 && (!_actionZeroDone || !_actionOneDone || !_actionFiveDone || _currentGripper != "Smart_gripper"))
+            if (actionId == 2 && (!_actionZeroDone || !_actionOneDone || !_actionFiveDone ||
+                                   !hasSmartGripper || _actionTwoDone))
             {
-                System.Diagnostics.Trace.WriteLine("[RL] Action 2 attempted without preconditions. Episode terminated.");
+                System.Diagnostics.Trace.WriteLine("[RL] Action 2 attempted without preconditions.");
                 UpdateDebug(2, -10.0);
                 return new StepResult(BuildObservation(), -10.0, true, false);
             }
 
-            if (actionId == 3 && _currentGripper == "Smart_gripper")
+            if (actionId == 3 && hasSmartGripper)
             {
                 UpdateDebug(3, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
-            if (actionId == 4 && _currentGripper == "Crate_gripper")
+            if (actionId == 4 && hasCrateGripper)
             {
                 UpdateDebug(4, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
-            if (actionId == 5 && (_actionFiveDone || _currentGripper != "Crate_gripper"))
+            if (actionId == 5 && (_actionFiveDone || !hasCrateGripper))
             {
                 UpdateDebug(5, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
-            if (actionId == 6 && (_currentGripper != "Crate_gripper" ||
-           !_actionTwoDone ||
-           _boxesInCrate3TypeA < MAX_BOXES_PER_CRATE))
+            if (actionId == 6 && (!hasCrateGripper || !_actionTwoDone ||
+                       _boxesInCrate3TypeA < MAX_BOXES_PER_CRATE ||
+                       _actionSixDone)) 
             {
                 System.Diagnostics.Trace.WriteLine("[RL] Action 6 attempted without preconditions.");
                 UpdateDebug(6, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
-            // --- EXECUTE ACTIONS (unchanged) ---
+            // NEW: Action 7 feasibility check
+            // Conditions: action 5 done, smart gripper, action 1 done, not already done
+            if (actionId == 7 && (!_actionFiveDone || !hasSmartGripper ||
+                                   !_actionOneDone || _actionSevenDone))
+            {
+                System.Diagnostics.Trace.WriteLine("[RL] Action 7 attempted without preconditions.");
+                UpdateDebug(7, -5.0);
+                return new StepResult(BuildObservation(), -5.0, true, false);
+            }
+
+            // NEW: Action 8 feasibility check
+            // Conditions: action 6 done, crate gripper, action 7 done, not already done
+            if (actionId == 8 && (!_actionSixDone || !hasCrateGripper ||
+                                   !_actionSevenDone || _actionEightDone))
+            {
+                System.Diagnostics.Trace.WriteLine("[RL] Action 8 attempted without preconditions.");
+                UpdateDebug(8, -5.0);
+                return new StepResult(BuildObservation(), -5.0, true, false);
+            }
+
+            // --- EXECUTE ACTIONS ---
             try
             {
                 List<string> pickFrames = new List<string>();
@@ -301,6 +339,9 @@ namespace ProcessSimulateSnippets
                 TxPose unload_crate_station = _line.GetPoseByName(unload_crates_station);
                 var unload_crat_stat = (double)unload_crate_station.PoseData.JointValues[0];
 
+                TxPose unload_crate2_station_pose = _line.GetPoseByName(unload_crate2_station); // NEW
+                var unload_crat2_stat = (double)unload_crate2_station_pose.PoseData.JointValues[0]; // NEW
+
                 bool check_pos = false;
                 string op_type = "";
                 double currentY = _robot.AbsoluteLocation.Translation.Y;
@@ -314,7 +355,7 @@ namespace ProcessSimulateSnippets
 
                 switch (actionId)
                 {
-                    case 0:
+                    case 0: // Place Type A pieces in small box
                         pickFrames.Add(_pickA1);
                         pickFrames.Add(_pickA2);
                         placeFrames.Add(_placeA1);
@@ -331,7 +372,7 @@ namespace ProcessSimulateSnippets
                         _actionZeroDone = true;
                         break;
 
-                    case 1:
+                    case 1: // Place Type B pieces in small box
                         pickFrames.Add(_pickB1);
                         pickFrames.Add(_pickB2);
                         placeFrames.Add(_placeB1);
@@ -348,7 +389,7 @@ namespace ProcessSimulateSnippets
                         _actionOneDone = true;
                         break;
 
-                    case 2:
+                    case 2: // Insert Type A small boxes into Crate 3
                         pickFrames.Add(_pickBoxA1);
                         pickFrames.Add(_pickBoxA2);
                         placeFrames.Add(_placeBox1Crate3);
@@ -362,11 +403,11 @@ namespace ProcessSimulateSnippets
                             check_pos = true;
                             rob_pos = pp_box_in_crate_station;
                         }
-                        _actionTwoDone = true;   // NEW - mark box inserted into crate
-                        _boxesInCrate3TypeA = _boxesInCrate3TypeA + n_sequential_op;  // 2 pieces added at a time
+                        _actionTwoDone = true;
+                        _boxesInCrate3TypeA += n_sequential_op; // 2 boxes added
                         break;
 
-                    case 3:
+                    case 3: // Tool change to Smart gripper
                         op_type = "tc";
                         gripper_to_mount = "Smart_gripper";
                         gripper_to_unmount = "Crate_gripper";
@@ -380,7 +421,7 @@ namespace ProcessSimulateSnippets
                         _currentGripper = "Smart_gripper";
                         break;
 
-                    case 4:
+                    case 4: // Tool change to Crate gripper
                         op_type = "tc";
                         gripper_to_unmount = "Smart_gripper";
                         gripper_to_mount = "Crate_gripper";
@@ -394,7 +435,7 @@ namespace ProcessSimulateSnippets
                         _currentGripper = "Crate_gripper";
                         break;
 
-                    case 5:
+                    case 5: // Place all crates on slider
                         pickFrames.Add(_pickCrate3);
                         pickFrames.Add(_pickCrate2);
                         pickFrames.Add(_pickCrate1);
@@ -413,19 +454,52 @@ namespace ProcessSimulateSnippets
                         _actionFiveDone = true;
                         break;
 
-                    case 6:
+                    case 6: // Remove Crate 3 from slider
                         pickFrames.Add(_pickCrate3);
                         placeFrames.Add(_crateLowOutfeed);
                         n_sequential_op = 1;
                         op_type = "pp";
-                        home_pose = crate_home; // adjust if needed
+                        home_pose = crate_home;
                         optimize_config = false;
-                        if (currentY != unload_crat_stat) // adjust position check if needed
+                        if (currentY != unload_crat_stat)
                         {
                             check_pos = true;
                             rob_pos = unload_crates_station;
                         }
                         _actionSixDone = true;
+                        break;
+
+                    case 7: // Insert Type B small boxes into Crate 2
+                        pickFrames.Add(_pickBoxB1);
+                        pickFrames.Add(_pickBoxB2);
+                        placeFrames.Add(_placeBox1Crate2);
+                        placeFrames.Add(_placeBox2Crate2);
+                        n_sequential_op = 2;
+                        op_type = "pp";
+                        home_pose = pp_home;
+                        optimize_config = true;
+                        if (currentY != pp_pose_rob_bic)
+                        {
+                            check_pos = true;
+                            rob_pos = pp_box_in_crate_station;
+                        }
+                        _actionSevenDone = true;
+                        _boxesInCrate2TypeB += n_sequential_op; // 2 boxes added
+                        break;
+
+                    case 8: // Remove Crate 2 from slider
+                        pickFrames.Add(_pickCrate2);
+                        placeFrames.Add(_crate2Outfeed);
+                        n_sequential_op = 1;
+                        op_type = "pp";
+                        home_pose = crate_home;
+                        optimize_config = false;
+                        if (currentY != unload_crat2_stat)
+                        {
+                            check_pos = true;
+                            rob_pos = unload_crate2_station;
+                        }
+                        _actionEightDone = true;
                         break;
 
                     default:
@@ -461,12 +535,21 @@ namespace ProcessSimulateSnippets
                 // Compute reward
                 reward = -opTime * 0.01;
 
-                // Success condition
+                // Success condition: episode ends when Crate 2 is removed
+                if (actionId == 8)
+                {
+                    reward += 10.0; // larger bonus since this is the final goal
+                    terminated = true;
+                    System.Diagnostics.Trace.WriteLine("[RL] Goal reached! Crate 2 removed from slider.");
+                    TxMessageBox.Show("Episode correctly terminated", "Termination",
+                                      MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                }
+
+                // Intermediate reward for completing action 6
                 if (actionId == 6)
                 {
                     reward += 5.0;
-                    terminated = true;
-                    System.Diagnostics.Trace.WriteLine("[RL] Goal reached! Box inserted into crate.");
+                    System.Diagnostics.Trace.WriteLine("[RL] Crate 3 removed. Halfway done.");
                 }
 
                 System.Diagnostics.Trace.WriteLine(
@@ -479,7 +562,6 @@ namespace ProcessSimulateSnippets
                 return new StepResult(BuildObservation(), -10.0, true, false);
             }
 
-            // Check truncation
             if (_stepCount >= MAX_STEPS)
                 truncated = true;
 
@@ -488,7 +570,7 @@ namespace ProcessSimulateSnippets
         }
 
         // =====================================================
-        //  EXECUTE A PICK AND PLACE OPERATION (unchanged)
+        //  EXECUTE A PICK AND PLACE OPERATION
         // =====================================================
 
         private double ExecutePickAndPlace(
@@ -523,6 +605,22 @@ namespace ProcessSimulateSnippets
             TxApplication.ActiveDocument.CurrentOperation = myop;
             _player.Play();
 
+            // Attach the Small boxes A to the crate 3
+            if (actionId == 2)
+            {
+                _robotResource.AttachItem(small_boxes_A_1[it], "Crate_3"); // Box to crate
+                _robotResource.AttachItem(pieces_A_1[it], "Crate_3"); // Piece to crate
+            }
+
+            // Attach the Small boxes B to the crate 2
+            if (actionId == 7)
+            {
+                _robotResource.AttachItem(small_boxes_B_1[it], "Crate_2"); // Box to crate
+                _robotResource.AttachItem(pieces_B_1[it], "Crate_2"); // Piece to crate
+            }
+
+
+            // Handle slider resource placement after action 5 (load crates)
             if (actionId == 5)
             {
                 int num_crate = NUM_CRATES - it;
@@ -531,15 +629,31 @@ namespace ProcessSimulateSnippets
                 _available_places_on_slider[it] = 0;
             }
 
+            // Handle gravity advancement after action 6 (remove Crate 3)
+            // Crate 2 falls to low position, Crate 1 falls to middle position
+            if (actionId == 6)
+            {
+                _robotResource.PlaceResourceAccordingToFrame("Crate_2", slider_frames[0]);
+                _robotResource.PlaceResourceAccordingToFrame("Crate_1", slider_frames[1]);
+            }
+
+            // Handle gravity advancement after action 8 (remove Crate 2)
+            // Crate 1 falls to low position
+            if (actionId == 8)
+            {
+                _robotResource.PlaceResourceAccordingToFrame("Crate_1", slider_frames[0]);
+            }
+
             double timeTaken = _player.CurrentTime;
             System.Diagnostics.Trace.WriteLine($"[RL] Robot operation '{opName}' completed in {timeTaken:F2}s");
-            System.Diagnostics.Trace.WriteLine($"[RL] Total operation completed in {timeTaken + base_pos_time + home_pos_time:F2}s");
+            System.Diagnostics.Trace.WriteLine(
+                $"[RL] Total operation completed in {timeTaken + base_pos_time + home_pos_time:F2}s");
 
             return timeTaken + base_pos_time + home_pos_time;
         }
 
         // =====================================================
-        //  EXECUTE A WAIT OPERATION (unchanged)
+        //  EXECUTE A WAIT OPERATION
         // =====================================================
 
         private double ExecuteWait(
@@ -565,10 +679,12 @@ namespace ProcessSimulateSnippets
                 System.Diagnostics.Trace.WriteLine($"[RL] Base operation '{base_opName}' completed in {base_pos_time:F2}s");
             }
 
-            _robotResource.UnMountToolGripper("GoFa12", gripper_to_unmount, "tool_station_" + gripper_to_unmount);
+            _robotResource.UnMountToolGripper("GoFa12", gripper_to_unmount,
+                "tool_station_" + gripper_to_unmount);
             _robotResource.MountToolGripper("GoFa12", gripper_to_mount, "tool_holder_offset",
                 "BASEFRAME_" + gripper_to_mount, "TCPF_" + gripper_to_mount);
-            TxDeviceOperation myop = _robotResource.CreateDeviceOp("Line", "Wait_" + base_opName, rob_pos, tool_change_duration);
+            TxDeviceOperation myop = _robotResource.CreateDeviceOp(
+                "Line", "Wait_" + base_opName, rob_pos, tool_change_duration);
             _created_deviceOps.Add(myop);
 
             TxApplication.ActiveDocument.CurrentOperation = myop;
@@ -576,7 +692,8 @@ namespace ProcessSimulateSnippets
 
             double timeTaken = _player.CurrentTime;
             System.Diagnostics.Trace.WriteLine($"[RL] Robot operation '{opName}' completed in {timeTaken:F2}s");
-            System.Diagnostics.Trace.WriteLine($"[RL] Total operation completed in {timeTaken + base_pos_time + home_pos_time:F2}s");
+            System.Diagnostics.Trace.WriteLine(
+                $"[RL] Total operation completed in {timeTaken + base_pos_time + home_pos_time:F2}s");
 
             return timeTaken + base_pos_time + home_pos_time;
         }
@@ -587,14 +704,14 @@ namespace ProcessSimulateSnippets
 
         private ObservationPacket BuildObservation()
         {
-            // === ROBOT STATE (unchanged) ===
+            // === ROBOT STATE ===
             double railPos = _robot.AbsoluteLocation.Translation.Y / MAX_RAIL_LENGTH;
             railPos = Math.Max(0.0, Math.Min(1.0, railPos));
             double gripperSmart = (_currentGripper == "Smart_gripper") ? 1.0 : 0.0;
             double gripperCrate = (_currentGripper == "Crate_gripper") ? 1.0 : 0.0;
             double gripperNone = 1.0 - gripperSmart - gripperCrate;
 
-            // === LINE STATE (unchanged) ===
+            // === LINE STATE ===
             double typeADone = _actionZeroDone ? 1.0 : 0.0;
             double typeBDone = _actionOneDone ? 1.0 : 0.0;
             double boxesReady = (_actionZeroDone && _actionOneDone) ? 1.0 : 0.0;
@@ -603,52 +720,65 @@ namespace ProcessSimulateSnippets
             double boxInCrate = _actionTwoDone ? 1.0 : 0.0;
             double elapsedNorm = Math.Min(_totalRobotTime / MAX_EXPECTED_TIME, 1.0);
 
-            // === CRATE CONTENTS (NEW) ===
-            // Normalize by max boxes per crate
+            // === CRATE CONTENTS ===
             double boxesInCrate3A = (double)_boxesInCrate3TypeA / MAX_BOXES_PER_CRATE;
             double boxesInCrate2B = (double)_boxesInCrate2TypeB / MAX_BOXES_PER_CRATE;
 
-            // === ASSEMBLE STATE VECTOR (12 variables) ===
+            // === NEW ACTION FLAGS ===
+            double crate3Removed = _actionSixDone ? 1.0 : 0.0;  // NEW
+            double boxBInCrate2 = _actionSevenDone ? 1.0 : 0.0;  // NEW
+
+            // === ASSEMBLE STATE VECTOR (14 variables) ===
+            // ORDER MUST NEVER CHANGE - only append new variables at the end
             var state = new List<double>
             {
-                railPos,          // 0: robot rail position normalized
-                gripperSmart,     // 1: gripper one-hot - Smart gripper
-                gripperCrate,     // 2: gripper one-hot - Crate gripper
-                gripperNone,      // 3: gripper one-hot - No gripper
-                typeADone,        // 4: Type A pieces placed in box
-                typeBDone,        // 5: Type B pieces placed in box
-                boxesReady,       // 6: both box types complete and ready
-                cratesOnSlider,   // 7: fraction of crates placed on slider
-                boxInCrate,       // 8: box successfully inserted into crate
-                elapsedNorm,      // 9: total elapsed robot time normalized
-                boxesInCrate3A,   // 10: Type A boxes in crate 3 normalized  -- NEW
-                boxesInCrate2B    // 11: Type B boxes in crate 2 normalized  -- NEW
+                railPos,          // 0:  robot rail position normalized
+                gripperSmart,     // 1:  gripper one-hot - Smart gripper
+                gripperCrate,     // 2:  gripper one-hot - Crate gripper
+                gripperNone,      // 3:  gripper one-hot - No gripper
+                typeADone,        // 4:  Type A pieces placed in box
+                typeBDone,        // 5:  Type B pieces placed in box
+                boxesReady,       // 6:  both box types complete and ready
+                cratesOnSlider,   // 7:  fraction of crates placed on slider
+                boxInCrate,       // 8:  Type A boxes inserted into crate 3
+                elapsedNorm,      // 9:  total elapsed robot time normalized
+                boxesInCrate3A,   // 10: Type A boxes in crate 3 normalized
+                boxesInCrate2B,   // 11: Type B boxes in crate 2 normalized
+                crate3Removed,    // 12: crate 3 has been removed from slider (NEW)
+                boxBInCrate2      // 13: Type B boxes have been inserted into crate 2 (NEW)
             };
 
             // === ACTION MASK ===
             bool hasSmartGripper = _currentGripper == "Smart_gripper";
             bool hasCrateGripper = _currentGripper == "Crate_gripper";
 
-            // Action 6 feasibility condition
             bool action6Feasible = hasCrateGripper &&
                        _actionTwoDone &&
-                       (_boxesInCrate3TypeA >= MAX_BOXES_PER_CRATE);
+                       (_boxesInCrate3TypeA >= MAX_BOXES_PER_CRATE) &&
+                       !_actionSixDone;
+
+            bool action7Feasible = hasSmartGripper &&
+                                   _actionFiveDone &&
+                                   _actionOneDone &&
+                                   !_actionSevenDone;
+
+            bool action8Feasible = hasCrateGripper &&
+                                   _actionSixDone &&
+                                   _actionSevenDone &&
+                                   !_actionEightDone;
 
             var actionMask = new List<int>
             {
-                (!_actionZeroDone && hasSmartGripper) ? 1 : 0, // 0
-                (!_actionOneDone  && hasSmartGripper) ? 1 : 0, // 1
-
-                (_actionZeroDone &&
-                 _actionOneDone &&
-                 _actionFiveDone &&
-                 hasSmartGripper &&
-                 !_actionTwoDone) ? 1 : 0,                     // 2
-
-                !hasSmartGripper ? 1 : 0,                      // 3
-                !hasCrateGripper ? 1 : 0,                      // 4
-                (!_actionFiveDone && hasCrateGripper) ? 1 : 0,// 5
-                action6Feasible ? 1 : 0                        // 6
+                (!_actionZeroDone && hasSmartGripper) ? 1 : 0,                 // 0
+                (!_actionOneDone  && hasSmartGripper) ? 1 : 0,                 // 1
+                (_actionZeroDone && _actionOneDone && _actionFiveDone &&
+                 hasSmartGripper && !_actionTwoDone) ? 1 : 0,                  // 2
+                !hasSmartGripper ? 1 : 0,                                       // 3
+                !hasCrateGripper ? 1 : 0,                                       // 4
+                (!_actionFiveDone && hasCrateGripper) ? 1 : 0,                  // 5
+                action6Feasible ? 1 : 0,                                        // 6
+                action7Feasible ? 1 : 0,                                        // 7 NEW
+                action8Feasible ? 1 : 0                                         // 8 NEW
             };
 
             return new ObservationPacket
