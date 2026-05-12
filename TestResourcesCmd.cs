@@ -61,12 +61,12 @@ namespace ProcessSimulateSnippets
             //item_resource.ChangeVisibility("Type_A_box_cover_left_1", invisible);
             //line_resource.CreateDevicePose("Line", device_pos, "Crate_outfeed");
             //robot_resource.ComputeJacobian();
-            //robot_resource.PlaceResourceAccordingToFrame("Crate_3", "crate_top_on_line_station");
+            robot_resource.PlaceResourceAccordingToFrame("Pallet_pieces_A", "Pallet_A_table");
             //TxDeviceOperation my_op = robot_resource.CreateDeviceOp("Line", "Op", "Crate_station");
             //TxDeviceOperation my_op = robot_resource.HomeRobot("GoFa12", "Op", "Crate_home", 0.0);
 
             //TxContinuousRoboticOperation myop = robot_resource.PP_op("GoFa12", "Crate_gripper", "pick_top_crate_frame", "place_crate", "test_op", offset, "Crate_home", false);
-            robot_resource.AttachItem("Type_A_box_left_2", "crate_low_on_slider_station");
+            //robot_resource.AttachItem("Type_A_box_left_2", "crate_low_on_slider_station");
             //TxSnapshot txSnapshot = robot_resource.CreateSnap("Initial_conditions");
             //TxApplySnapshotParams snapParam = robot_resource.CreateSnapPar();
             //txSnapshot.Apply(snapParam);

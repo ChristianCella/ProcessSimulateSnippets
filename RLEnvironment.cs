@@ -10,6 +10,33 @@ namespace ProcessSimulateSnippets
         // === DEBUG GUI ===
         private RLDebugPanel _debugPanel;
 
+        // === HUMAN STATE ===
+        private TxHuman _humanProxy;
+        private bool _humanTaskDone = false;    // Has the human completed its current task?
+        private bool _humanBusy = false;        // Is the human currently moving?
+        private int _humanWaypointIndex = 0;    // Which waypoint the human is heading to
+        private double _humanProgress = 0.0;    // 0.0 to 1.0 along current segment
+        private double _humanSpeed = 200.0;    // mm per second
+        private double _humanPathLength = 0.0;
+        private TxTransformation _humanSegmentStart;
+        private TxTransformation _humanSegmentGoal;
+
+        // Human task: sequence of frames to visit (starts and ends at home)
+        private readonly string _humanHomeFrame = "human_home_frame";
+        private readonly List<string> _humanTask0Frames = new List<string>
+        {
+            "human_home_frame",
+            "human_leave_pallet_A_1",
+            "human_home_frame"
+        };
+
+        private double _lastSimTime = 0.0;
+
+        // What the human does at each waypoint (null = just walk, otherwise an action)
+        // At index 1 (after reaching "human_leave_pallet_A_1"), place the pallet
+        private readonly string _palletPiecesA = "Pallet_pieces_A";
+        private readonly string _palletProxyFrame = "fixtures_pallet_A_frame"; // frame where pallet gets placed
+
         // === CONFIGURATION ===
         private const int NUM_ACTIONS = 9;
         private const int NUM_CRATES = 3;
@@ -131,8 +158,9 @@ namespace ProcessSimulateSnippets
         };
         private readonly string _gripperName = "Smart_gripper";
 
-        public RLEnvironment(string robotName, string lineName)
+        public RLEnvironment(string robotName, string lineName, string humanName)
         {
+            // Get the robot
             var objects = TxApplication.ActiveDocument.GetObjectsByName(robotName);
             if (objects.Count == 0)
                 throw new Exception($"Robot '{robotName}' not found in the scene.");
@@ -140,6 +168,7 @@ namespace ProcessSimulateSnippets
             if (_robot == null)
                 throw new Exception($"'{robotName}' exists but is not a TxRobot.");
 
+            // Get the line device
             var objects_line = TxApplication.ActiveDocument.GetObjectsByName(lineName);
             if (objects_line.Count == 0)
                 throw new Exception($"Line '{lineName}' not found in the scene.");
@@ -147,8 +176,13 @@ namespace ProcessSimulateSnippets
             if (_line == null)
                 throw new Exception($"'{lineName}' exists but is not a TxDevice.");
 
-            _robotResource = new TxResources();
+            // Get the human
+            var humanObjects = TxApplication.ActiveDocument.GetObjectsByName(humanName);
+            if (humanObjects.Count == 0)
+                throw new Exception("Human proxy not found in the scene.");
+            _humanProxy = humanObjects[0] as TxHuman;
 
+            _robotResource = new TxResources();
             _snapshot = _robotResource.CreateSnap("RL_Initial_Conditions");
             _snapParams = _robotResource.CreateSnapPar();
 
@@ -212,6 +246,24 @@ namespace ProcessSimulateSnippets
             _boxesInCrate3TypeA = 0;
             _boxesInCrate2TypeB = 0;  // reset properly now that it is used
 
+            _humanTaskDone = false;
+            _humanBusy = false;
+            _humanWaypointIndex = 0;
+            _humanProgress = 0.0;
+
+            // Place human at home position
+            var homeObj = TxApplication.ActiveDocument.GetObjectsByName(_humanHomeFrame);
+            TxFrame homeFrame = homeObj[0] as TxFrame;
+            TxTransformation homePos = new TxTransformation(_humanProxy.AbsoluteLocation);
+            homePos.Translation = new TxVector(
+                homeFrame.AbsoluteLocation.Translation.X,
+                homeFrame.AbsoluteLocation.Translation.Y,
+                _humanProxy.AbsoluteLocation.Translation.Z);
+            _humanProxy.AbsoluteLocation = homePos;
+
+            // Start the human task immediately
+            StartHumanTask();
+
             _player = TxApplication.ActiveDocument.SimulationPlayer;
             _player.ResetToDefaultSetting();
             _player.AskUserForReset(false);
@@ -247,7 +299,7 @@ namespace ProcessSimulateSnippets
             bool hasCrateGripper = _currentGripper == "Crate_gripper";
 
             // --- FEASIBILITY CHECKS ---
-            if (actionId == 0 && (_actionZeroDone || !hasSmartGripper))
+            if (actionId == 0 && (_actionZeroDone || !hasSmartGripper || !_humanTaskDone))
             {
                 UpdateDebug(0, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
@@ -581,8 +633,13 @@ namespace ProcessSimulateSnippets
         {
             TxDeviceOperation home_op = _robotResource.HomeRobot("GoFa12", home_opName, home_pose, 0.0);
             _created_deviceOps.Add(home_op);
+
+            _lastSimTime = 0.0;
+            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
             TxApplication.ActiveDocument.CurrentOperation = home_op;
             _player.Play();
+            _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+
             double home_pos_time = _player.CurrentTime;
             System.Diagnostics.Trace.WriteLine($"[RL] Homing operation '{home_opName}' completed in {home_pos_time:F2}s");
 
@@ -591,8 +648,13 @@ namespace ProcessSimulateSnippets
             {
                 TxDeviceOperation base_op = _robotResource.CreateDeviceOp("Line", base_opName, rob_pos, 0.0);
                 _created_deviceOps.Add(base_op);
+
+                _lastSimTime = 0.0;
+                _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
                 TxApplication.ActiveDocument.CurrentOperation = base_op;
                 _player.Play();
+                _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+
                 base_pos_time = _player.CurrentTime;
                 System.Diagnostics.Trace.WriteLine($"[RL] Base operation '{base_opName}' completed in {base_pos_time:F2}s");
             }
@@ -602,8 +664,11 @@ namespace ProcessSimulateSnippets
                 opName, OFFSET, home_pose, optimize_config);
             _createdOps.Add(myop);
 
+            _lastSimTime = 0.0;
+            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
             TxApplication.ActiveDocument.CurrentOperation = myop;
             _player.Play();
+            _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
 
             // Attach the Small boxes A to the crate 3
             if (actionId == 2)
@@ -663,8 +728,13 @@ namespace ProcessSimulateSnippets
         {
             TxDeviceOperation home_op = _robotResource.HomeRobot("GoFa12", home_opName, home_pose, 0.0);
             _created_deviceOps.Add(home_op);
+
+            _lastSimTime = 0.0;
+            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
             TxApplication.ActiveDocument.CurrentOperation = home_op;
             _player.Play();
+            _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+
             double home_pos_time = _player.CurrentTime;
             System.Diagnostics.Trace.WriteLine($"[RL] Homing operation '{home_opName}' completed in {home_pos_time:F2}s");
 
@@ -673,8 +743,13 @@ namespace ProcessSimulateSnippets
             {
                 TxDeviceOperation base_op = _robotResource.CreateDeviceOp("Line", base_opName, rob_pos, 0.0);
                 _created_deviceOps.Add(base_op);
+
+                _lastSimTime = 0.0;
+                _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
                 TxApplication.ActiveDocument.CurrentOperation = base_op;
                 _player.Play();
+                _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+
                 base_pos_time = _player.CurrentTime;
                 System.Diagnostics.Trace.WriteLine($"[RL] Base operation '{base_opName}' completed in {base_pos_time:F2}s");
             }
@@ -687,8 +762,11 @@ namespace ProcessSimulateSnippets
                 "Line", "Wait_" + base_opName, rob_pos, tool_change_duration);
             _created_deviceOps.Add(myop);
 
+            _lastSimTime = 0.0;
+            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
             TxApplication.ActiveDocument.CurrentOperation = myop;
             _player.Play();
+            _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
 
             double timeTaken = _player.CurrentTime;
             System.Diagnostics.Trace.WriteLine($"[RL] Robot operation '{opName}' completed in {timeTaken:F2}s");
@@ -720,6 +798,9 @@ namespace ProcessSimulateSnippets
             double boxInCrate = _actionTwoDone ? 1.0 : 0.0;
             double elapsedNorm = Math.Min(_totalRobotTime / MAX_EXPECTED_TIME, 1.0);
 
+            // === HUMAN STATE ===
+            double humanTaskComplete = _humanTaskDone ? 1.0 : 0.0;
+
             // === CRATE CONTENTS ===
             double boxesInCrate3A = (double)_boxesInCrate3TypeA / MAX_BOXES_PER_CRATE;
             double boxesInCrate2B = (double)_boxesInCrate2TypeB / MAX_BOXES_PER_CRATE;
@@ -745,7 +826,8 @@ namespace ProcessSimulateSnippets
                 boxesInCrate3A,   // 10: Type A boxes in crate 3 normalized
                 boxesInCrate2B,   // 11: Type B boxes in crate 2 normalized
                 crate3Removed,    // 12: crate 3 has been removed from slider (NEW)
-                boxBInCrate2      // 13: Type B boxes have been inserted into crate 2 (NEW)
+                boxBInCrate2,      // 13: Type B boxes have been inserted into crate 2 (NEW)
+                humanTaskComplete // 14: human has delivered pieces A
             };
 
             // === ACTION MASK ===
@@ -769,7 +851,7 @@ namespace ProcessSimulateSnippets
 
             var actionMask = new List<int>
             {
-                (!_actionZeroDone && hasSmartGripper) ? 1 : 0,                 // 0
+                (!_actionZeroDone && hasSmartGripper && _humanTaskDone) ? 1 : 0,  // Action 0
                 (!_actionOneDone  && hasSmartGripper) ? 1 : 0,                 // 1
                 (_actionZeroDone && _actionOneDone && _actionFiveDone &&
                  hasSmartGripper && !_actionTwoDone) ? 1 : 0,                  // 2
@@ -830,6 +912,114 @@ namespace ProcessSimulateSnippets
             _player?.AskUserForReset(false);
             _player?.DoOnlyUnscheduledReset(true);
             _communicator?.Dispose();
+        }
+
+        // =====================================================
+        //  HUMAN METHODS
+        // =====================================================
+
+        private void StartHumanTask()
+        {
+            _humanBusy = true;
+            _humanTaskDone = false;
+            _humanWaypointIndex = 0;
+            _humanProgress = 0.0;
+            SetNextHumanSegment();
+        }
+
+        private void SetNextHumanSegment()
+        {
+            _humanWaypointIndex++;
+            if (_humanWaypointIndex >= _humanTask0Frames.Count)
+            {
+                // Task complete — human is back home
+                _humanBusy = false;
+                _humanTaskDone = true;
+                System.Diagnostics.Trace.WriteLine("[RL] Human task completed.");
+                return;
+            }
+
+            _humanSegmentStart = new TxTransformation(_humanProxy.AbsoluteLocation);
+
+            string targetFrameName = _humanTask0Frames[_humanWaypointIndex];
+            var obj = TxApplication.ActiveDocument.GetObjectsByName(targetFrameName);
+            TxFrame targetFrame = obj[0] as TxFrame;
+            _humanSegmentGoal = new TxTransformation(targetFrame.AbsoluteLocation);
+
+            TxVector start = _humanSegmentStart.Translation;
+            TxVector end = _humanSegmentGoal.Translation;
+            _humanPathLength = Math.Sqrt(
+                (end.X - start.X) * (end.X - start.X) +
+                (end.Y - start.Y) * (end.Y - start.Y));
+            _humanProgress = 0.0;
+
+            System.Diagnostics.Trace.WriteLine($"[RL] Human heading to: {targetFrameName}");
+        }
+
+        private void UpdateHumanMovement(double deltaTime)
+        {
+            if (!_humanBusy) return;
+
+            if (_humanPathLength < 1.0)
+            {
+                PerformHumanActionAtWaypoint();
+                SetNextHumanSegment();
+                return;
+            }
+
+            double distanceMoved = _humanSpeed * deltaTime;
+            _humanProgress += distanceMoved / _humanPathLength;
+
+            if (_humanProgress >= 1.0)
+            {
+                // Arrived at waypoint
+                TxTransformation arrived = new TxTransformation(_humanProxy.AbsoluteLocation);
+                arrived.Translation = new TxVector(
+                    _humanSegmentGoal.Translation.X,
+                    _humanSegmentGoal.Translation.Y,
+                    _humanProxy.AbsoluteLocation.Translation.Z); // keep Z unchanged
+                _humanProxy.AbsoluteLocation = arrived;
+
+                PerformHumanActionAtWaypoint();
+                SetNextHumanSegment();
+            }
+            else
+            {
+                // Interpolate X and Y only
+                TxVector start = _humanSegmentStart.Translation;
+                TxVector goal = _humanSegmentGoal.Translation;
+                double x = start.X + (goal.X - start.X) * _humanProgress;
+                double y = start.Y + (goal.Y - start.Y) * _humanProgress;
+
+                TxTransformation newPos = new TxTransformation(_humanProxy.AbsoluteLocation);
+                newPos.Translation = new TxVector(x, y, _humanProxy.AbsoluteLocation.Translation.Z);
+                _humanProxy.AbsoluteLocation = newPos;
+            }
+        }
+
+        private void PerformHumanActionAtWaypoint()
+        {
+            // At waypoint index 1 (human_target_1): place the pallet on the line
+            if (_humanWaypointIndex == 1)
+            {
+                _robotResource.PlaceResourceAccordingToFrame(_palletPiecesA, _palletProxyFrame);
+                System.Diagnostics.Trace.WriteLine("[RL] Human placed pallet pieces A on the line.");
+            }
+        }
+
+        private void OnTimeIntervalReached(object sender, TxSimulationPlayer_TimeIntervalReachedEventArgs args)
+        {
+            double currentSimTime = args.CurrentTime;
+            double deltaTime;
+
+            if (currentSimTime < _lastSimTime)
+                deltaTime = currentSimTime;
+            else
+                deltaTime = currentSimTime - _lastSimTime;
+
+            _lastSimTime = currentSimTime;
+
+            UpdateHumanMovement(deltaTime);
         }
     }
 }

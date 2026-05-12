@@ -19,7 +19,8 @@ namespace ProcessSimulateSnippets
             {
                 string robotName = "GoFa12";
                 string lineName = "Line";
-                _environment = new RLEnvironment(robotName, lineName);
+                string humanName = "Jack";
+                _environment = new RLEnvironment(robotName, lineName, humanName);
                 TxMessageBox.Show(
                     "RL server started. Now run the Python script.",
                     "Server Status",
