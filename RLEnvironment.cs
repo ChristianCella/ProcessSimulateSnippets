@@ -5,10 +5,6 @@ using System.Windows.Forms;
 
 namespace ProcessSimulateSnippets
 {
-    // =====================================================
-    //  DATA STRUCTURES FOR HUMAN TASKS
-    // =====================================================
-
     public class HumanWaypointAction
     {
         public int WaypointIndex { get; set; }
@@ -17,7 +13,6 @@ namespace ProcessSimulateSnippets
         public List<string> UnblankResources { get; set; }
         public List<string> BlankResources { get; set; }
         public string UnlocksFlag { get; set; }
-
         public HumanWaypointAction()
         {
             RelocateResources = new List<string>();
@@ -34,7 +29,6 @@ namespace ProcessSimulateSnippets
         public List<HumanWaypointAction> Actions { get; set; }
         public bool IsWaitTask { get; set; }
         public double WaitDuration { get; set; }
-
         public HumanTask()
         {
             Waypoints = new List<string>();
@@ -46,7 +40,6 @@ namespace ProcessSimulateSnippets
 
     public class RLEnvironment : IDisposable
     {
-        // === DEBUG GUI ===
         private RLDebugPanel _debugPanel;
 
         // === HUMAN STATE ===
@@ -60,14 +53,20 @@ namespace ProcessSimulateSnippets
         private TxTransformation _humanSegmentGoal;
         private double _lastSimTime = 0.0;
 
-        // Human flags — set by human tasks, read by robot feasibility/mask
+        // Human flags
         private bool _piecesAAvailable = false;
         private bool _piecesBAvailable = false;
         private bool _cratesAvailable = false;
-        private bool _smallBoxesACreated = false;   // NEW: small boxes A placed on line
-        private bool _smallBoxesBCreated = false;   // NEW: small boxes B placed on line
-        private bool _smallBoxesAClosed = false;    // NEW: small boxes A closed (covers on)
-        private bool _smallBoxesBClosed = false;    // NEW: small boxes B closed (covers on)
+        // Batch 1
+        private bool _smallBoxesA1Created = false;
+        private bool _smallBoxesB1Created = false;
+        private bool _smallBoxesA1Closed = false;
+        private bool _smallBoxesB1Closed = false;
+        // Batch 2
+        private bool _smallBoxesA2Created = false;
+        private bool _smallBoxesB2Created = false;
+        private bool _smallBoxesA2Closed = false;
+        private bool _smallBoxesB2Closed = false;
 
         // Human task management
         private HumanTask _currentHumanTask;
@@ -75,246 +74,183 @@ namespace ProcessSimulateSnippets
         private double _humanWaitRemaining = 0.0;
         private Random _humanRng = new Random();
 
-        // Track which one-shot tasks have been done
-        private bool _humanTaskPiecesADone = false;
-        private bool _humanTaskPiecesBDone = false;
-        private bool _humanTaskCratesDone = false;
-        private bool _humanTaskCreateBoxesADone = false;  // NEW
-        private bool _humanTaskCreateBoxesBDone = false;  // NEW
-        private bool _humanTaskCloseBoxesADone = false;   // NEW
-        private bool _humanTaskCloseBoxesBDone = false;   // NEW
+        // Track one-shot human tasks
+        private bool _htPiecesADone = false;
+        private bool _htPiecesBDone = false;
+        private bool _htCratesDone = false;
+        private bool _htCreateBoxesA1Done = false;
+        private bool _htCreateBoxesB1Done = false;
+        private bool _htCloseBoxesA1Done = false;
+        private bool _htCloseBoxesB1Done = false;
+        private bool _htCreateBoxesA2Done = false;
+        private bool _htCreateBoxesB2Done = false;
+        private bool _htCloseBoxesA2Done = false;
+        private bool _htCloseBoxesB2Done = false;
 
-        // Human home frame
         private readonly string _humanHomeFrame = "human_home_frame";
-
-        // Pause duration after waypoint actions
         private const double WAYPOINT_PAUSE = 5.0;
 
         // =====================================================
         //  HUMAN TASK DEFINITIONS
         // =====================================================
 
-        // Task: deliver pieces A
-        private readonly HumanTask _humanTaskPiecesA = new HumanTask
+        private readonly HumanTask _htPiecesA = new HumanTask
         {
             Name = "Deliver Pieces A",
-            Waypoints = new List<string>
-            {
-                "human_home_frame",
-                "human_leave_pallet_A_1", 
-                "human_home_frame"
-            },
-            Actions = new List<HumanWaypointAction>
-            {
-                new HumanWaypointAction
-                {
-                    WaypointIndex = 1,
-                    RelocateResources = new List<string> { "Pallet_pieces_A" },  
-                    RelocateFrames = new List<string> { "fixtures_pallet_A_frame" },  
-                    UnblankResources = new List<string>(),
-                    BlankResources = new List<string>(),
-                    UnlocksFlag = "piecesAAvailable"
-                }
-            }
+            Waypoints = new List<string> { "human_home_frame", "human_leave_pallet_A_1", "human_home_frame" },
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string> { "Pallet_pieces_A" },
+                RelocateFrames = new List<string> { "fixtures_pallet_A_frame" },
+                UnblankResources = new List<string>(), BlankResources = new List<string>(),
+                UnlocksFlag = "piecesAAvailable"
+            }}
         };
 
-        // Task: deliver pieces B
-        private readonly HumanTask _humanTaskPiecesB_def = new HumanTask
+        private readonly HumanTask _htPiecesB = new HumanTask
         {
             Name = "Deliver Pieces B",
-            Waypoints = new List<string>
-            {
-                "human_home_frame",
-                "human_leave_pallet_B_1",
-                "human_home_frame"
-            },
-            Actions = new List<HumanWaypointAction>
-            {
-                new HumanWaypointAction
-                {
-                    WaypointIndex = 1,
-                    RelocateResources = new List<string> { "Pallet_pieces_B" },  
-                    RelocateFrames = new List<string> { "fixtures_pallet_B_frame" },
-                    UnblankResources = new List<string>(),
-                    BlankResources = new List<string>(),
-                    UnlocksFlag = "piecesBAvailable"
-                }
-            }
+            Waypoints = new List<string> { "human_home_frame", "human_leave_pallet_B_1", "human_home_frame" },
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string> { "Pallet_pieces_B" },
+                RelocateFrames = new List<string> { "fixtures_pallet_B_frame" },
+                UnblankResources = new List<string>(), BlankResources = new List<string>(),
+                UnlocksFlag = "piecesBAvailable"
+            }}
         };
 
-        // Task: deliver crates
-        private readonly HumanTask _humanTaskCrates = new HumanTask
+        private readonly HumanTask _htCrates = new HumanTask
         {
             Name = "Deliver Crates",
-            Waypoints = new List<string>
-            {
-                "human_home_frame",
-                "human_leave_crates_1",
-                "human_leave_crates_2",
-                "human_leave_crates_3",
-                "human_leave_crates_4",
-                "human_leave_crates_5",
-                "human_leave_crates_6",
-                "human_leave_crates_7",
-                "human_leave_crates_8",
-                "human_leave_crates_9",
-                "human_leave_crates_10",
-                "human_home_frame"
+            Waypoints = new List<string> {
+                "human_home_frame", "human_leave_crates_1", "human_leave_crates_2",
+                "human_leave_crates_3", "human_leave_crates_4", "human_leave_crates_5",
+                "human_leave_crates_6", "human_leave_crates_7", "human_leave_crates_8",
+                "human_leave_crates_9", "human_leave_crates_10", "human_home_frame"
             },
-            Actions = new List<HumanWaypointAction>
-            {
-                new HumanWaypointAction
-                {
-                    WaypointIndex = 5,
-                    RelocateResources = new List<string> { "Crate_1", "Crate_2", "Crate_3" },
-                    RelocateFrames = new List<string> { "crate_low_on_line_station", "crate_middle_on_line_station", "crate_top_on_line_station" },
-                    UnblankResources = new List<string>(),
-                    BlankResources = new List<string>(),
-                    UnlocksFlag = "cratesAvailable"
-                }
-            }
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 5,
+                RelocateResources = new List<string> { "Crate_1", "Crate_2", "Crate_3" },
+                RelocateFrames = new List<string> { "crate_low_on_line_station", "crate_middle_on_line_station", "crate_top_on_line_station" },
+                UnblankResources = new List<string>(), BlankResources = new List<string>(),
+                UnlocksFlag = "cratesAvailable"
+            }}
         };
 
-        // NEW Task: create small boxes A (unblank + relocate 2 boxes)
-        private readonly HumanTask _humanTaskCreateBoxesA = new HumanTask
+        // --- BATCH 1: Create boxes ---
+        private readonly HumanTask _htCreateBoxesA1 = new HumanTask
         {
-            Name = "Create Small Boxes A",
-            Waypoints = new List<string>
-            {
-                "human_home_frame",
-                "human_create_boxes",
-                "human_home_frame"
-            },
-            Actions = new List<HumanWaypointAction>
-            {
-                new HumanWaypointAction
-                {
-                    WaypointIndex = 1,
-                    RelocateResources = new List<string>
-                    {
-                        "Type_A_box_left_1", 
-                        "Type_A_box_right_1"  
-                    },
-                    RelocateFrames = new List<string>
-                    {
-                        "pallet_box_A_left", 
-                        "pallet_box_A_right" 
-                    },
-                    UnblankResources = new List<string>
-                    {
-                        "Type_A_box_left_1",
-                        "Type_A_box_right_1" 
-                    },
-                    BlankResources = new List<string>(),
-                    UnlocksFlag = "smallBoxesACreated"
-                }
-            }
+            Name = "Create Small Boxes A (batch 1)",
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string> { "Type_A_box_left_1", "Type_A_box_right_1" },          
+                RelocateFrames = new List<string> { "pallet_box_A_left", "pallet_box_A_right" },               
+                UnblankResources = new List<string> { "Type_A_box_left_1", "Type_A_box_right_1" },           
+                BlankResources = new List<string>(),
+                UnlocksFlag = "smallBoxesA1Created"
+            }}
         };
 
-        // NEW Task: create small boxes B (unblank + relocate 2 boxes)
-        private readonly HumanTask _humanTaskCreateBoxesB = new HumanTask
+        private readonly HumanTask _htCreateBoxesB1 = new HumanTask
         {
-            Name = "Create Small Boxes B",
-            Waypoints = new List<string>
-            {
-                "human_home_frame",
-                "human_create_boxes", 
-                "human_home_frame"
-            },
-            Actions = new List<HumanWaypointAction>
-            {
-                new HumanWaypointAction
-                {
-                    WaypointIndex = 1,
-                    RelocateResources = new List<string>
-                    {
-                        "Type_B_box_left_1",
-                        "Type_B_box_right_1"
-                    },
-                    RelocateFrames = new List<string>
-                    {
-                        "pallet_box_B_left", 
-                        "pallet_box_B_right" 
-                    },
-                    UnblankResources = new List<string>
-                    {
-                        "Type_B_box_left_1",  
-                        "Type_B_box_right_1" 
-                    },
-                    BlankResources = new List<string>(),
-                    UnlocksFlag = "smallBoxesBCreated"
-                }
-            }
+            Name = "Create Small Boxes B (batch 1)",
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string> { "Type_B_box_left_1", "Type_B_box_right_1" },    
+                RelocateFrames = new List<string> { "pallet_box_B_left", "pallet_box_B_right" },               
+                UnblankResources = new List<string> { "Type_B_box_left_1", "Type_B_box_right_1" },            
+                BlankResources = new List<string>(),
+                UnlocksFlag = "smallBoxesB1Created"
+            }}
         };
 
-        // NEW Task: close small boxes A (blank pieces inside, unblank covers)
-        // Can only happen after robot action 0 is done
-        private readonly HumanTask _humanTaskCloseBoxesA = new HumanTask
+        // --- BATCH 1: Close boxes ---
+        private readonly HumanTask _htCloseBoxesA1 = new HumanTask
         {
-            Name = "Close Small Boxes A",
-            Waypoints = new List<string>
-            {
-                "human_home_frame",
-                "human_close_boxes",
-                "human_home_frame"
-            },
-            Actions = new List<HumanWaypointAction>
-            {
-                new HumanWaypointAction
-                {
-                    WaypointIndex = 1,
-                    RelocateResources = new List<string>(),
-                    RelocateFrames = new List<string>(),
-                    BlankResources = new List<string>
-                    {
-                        "Piece_A_1",
-                        "Piece_A_2" 
-                    },
-                    UnblankResources = new List<string>
-                    {
-                        "Type_A_box_cover_left_1", 
-                        "Type_A_box_cover_right_1" 
-                    },
-                    UnlocksFlag = "smallBoxesAClosed"
-                }
-            }
+            Name = "Close Small Boxes A (batch 1)",
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
+                BlankResources = new List<string> { "Piece_A_1", "Piece_A_2" },                               
+                UnblankResources = new List<string> { "Type_A_box_cover_left_1", "Type_A_box_cover_right_1" },
+                UnlocksFlag = "smallBoxesA1Closed"
+            }}
         };
 
-        // NEW Task: close small boxes B (blank pieces inside, unblank covers)
-        // Can only happen after robot action 1 is done
-        private readonly HumanTask _humanTaskCloseBoxesB = new HumanTask
+        private readonly HumanTask _htCloseBoxesB1 = new HumanTask
         {
-            Name = "Close Small Boxes B",
-            Waypoints = new List<string>
-            {
-                "human_home_frame",
-                "human_close_boxes",  
-                "human_home_frame"
-            },
-            Actions = new List<HumanWaypointAction>
-            {
-                new HumanWaypointAction
-                {
-                    WaypointIndex = 1,
-                    RelocateResources = new List<string>(),
-                    RelocateFrames = new List<string>(),
-                    BlankResources = new List<string>
-                    {
-                        "Piece_B_1",   
-                        "Piece_B_2"   
-                    },
-                    UnblankResources = new List<string>
-                    {
-                        "Type_B_box_cover_left_1",  
-                        "Type_B_box_cover_right_1" 
-                    },
-                    UnlocksFlag = "smallBoxesBClosed"
-                }
-            }
+            Name = "Close Small Boxes B (batch 1)",
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
+                BlankResources = new List<string> { "Piece_B_1", "Piece_B_2" },                                
+                UnblankResources = new List<string> { "Type_B_box_cover_left_1", "Type_B_box_cover_right_1" }, 
+                UnlocksFlag = "smallBoxesB1Closed"
+            }}
         };
 
-        // Task: wait in place
-        private readonly HumanTask _humanTaskWait = new HumanTask
+        // --- BATCH 2: Create boxes ---
+        private readonly HumanTask _htCreateBoxesA2 = new HumanTask
+        {
+            Name = "Create Small Boxes A (batch 2)",
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },     
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string> { "Type_A_box_left_2", "Type_A_box_right_2" },           
+                RelocateFrames = new List<string> { "pallet_box_A_left", "pallet_box_A_right" },           
+                UnblankResources = new List<string> { "Type_A_box_left_2", "Type_A_box_right_2" },             
+                BlankResources = new List<string>(),
+                UnlocksFlag = "smallBoxesA2Created"
+            }}
+        };
+
+        private readonly HumanTask _htCreateBoxesB2 = new HumanTask
+        {
+            Name = "Create Small Boxes B (batch 2)",
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },     
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string> { "Type_B_box_left_2", "Type_B_box_right_2" },           
+                RelocateFrames = new List<string> { "pallet_box_B_left", "pallet_box_B_right" },           
+                UnblankResources = new List<string> { "Type_B_box_left_2", "Type_B_box_right_2" },             
+                BlankResources = new List<string>(),
+                UnlocksFlag = "smallBoxesB2Created"
+            }}
+        };
+
+        // --- BATCH 2: Close boxes ---
+        private readonly HumanTask _htCloseBoxesA2 = new HumanTask
+        {
+            Name = "Close Small Boxes A (batch 2)",
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },      
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
+                BlankResources = new List<string> { "Piece_A_3", "Piece_A_4" },                               
+                UnblankResources = new List<string> { "Type_A_box_cover_left_2", "Type_A_box_cover_right_2" },
+                UnlocksFlag = "smallBoxesA2Closed"
+            }}
+        };
+
+        private readonly HumanTask _htCloseBoxesB2 = new HumanTask
+        {
+            Name = "Close Small Boxes B (batch 2)",
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },     
+            Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
+                WaypointIndex = 1,
+                RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
+                BlankResources = new List<string> { "Piece_B_3", "Piece_B_4" },                                
+                UnblankResources = new List<string> { "Type_B_box_cover_left_2", "Type_B_box_cover_right_2" },
+                UnlocksFlag = "smallBoxesB2Closed"
+            }}
+        };
+
+        private readonly HumanTask _htWait = new HumanTask
         {
             Name = "Wait",
             IsWaitTask = true,
@@ -324,15 +260,14 @@ namespace ProcessSimulateSnippets
         };
 
         // === CONFIGURATION ===
-        private const int NUM_ACTIONS = 9;
+        private const int NUM_ACTIONS = 13;
         private const int NUM_CRATES = 3;
-        private const int MAX_STEPS = 30;
+        private const int MAX_STEPS = 50;
         private const double OFFSET = 200.0;
         private const double tool_change_duration = 15.0;
-
-        // Normalization constants
         private const double MAX_RAIL_LENGTH = 3000.0;
-        private const double MAX_EXPECTED_TIME = 500.0;
+        private const double MAX_EXPECTED_TIME = 800.0;
+        private const int MAX_BOXES_PER_CRATE = 4;
 
         // Robot poses
         private const string pp_station = "PP_station";
@@ -342,109 +277,98 @@ namespace ProcessSimulateSnippets
         private const string unload_crates_station = "Unload_crate_station";
         private const string unload_crate2_station = "Unload_crate_station";
 
-        // Home poses
         private const string pp_home = "PP_home";
         private const string crate_home = "Crate_home";
         private const string tool_change_home = "Tool_change_home";
 
-        // Small boxes and covers
+        // Batch 1 boxes/pieces/covers
         private readonly List<string> small_boxes_A_1 = new List<string> { "Type_A_box_left_1", "Type_A_box_right_1" };
         private readonly List<string> cover_boxes_A_1 = new List<string> { "Type_A_box_cover_left_1", "Type_A_box_cover_right_1" };
+        private readonly List<string> pieces_A_1 = new List<string> { "Piece_A_1", "Piece_A_2" };
         private readonly List<string> small_boxes_B_1 = new List<string> { "Type_B_box_left_1", "Type_B_box_right_1" };
         private readonly List<string> cover_boxes_B_1 = new List<string> { "Type_B_box_cover_left_1", "Type_B_box_cover_right_1" };
-
-        // Pieces names
-        private readonly List<string> pieces_A_1 = new List<string> { "Piece_A_1", "Piece_A_2" };
         private readonly List<string> pieces_B_1 = new List<string> { "Piece_B_1", "Piece_B_2" };
 
-        // === SCENE OBJECTS ===
+        // Batch 2 boxes/pieces/covers
+        private readonly List<string> small_boxes_A_2 = new List<string> { "Type_A_box_left_2", "Type_A_box_right_2" };      
+        private readonly List<string> cover_boxes_A_2 = new List<string> { "Type_A_box_cover_left_2", "Type_A_box_cover_right_2" }; 
+        private readonly List<string> pieces_A_2 = new List<string> { "Piece_A_3", "Piece_A_4" };                                 
+        private readonly List<string> small_boxes_B_2 = new List<string> { "Type_B_box_left_2", "Type_B_box_right_2" };          
+        private readonly List<string> cover_boxes_B_2 = new List<string> { "Type_B_box_cover_left_2", "Type_B_box_cover_right_2" }; 
+        private readonly List<string> pieces_B_2 = new List<string> { "Piece_B_3", "Piece_B_4" };                                  
+
+        // Scene objects
         private readonly TxRobot _robot;
         private readonly TxDevice _line;
         private readonly TxResources _robotResource;
-
-        // === SIMULATION PLAYER ===
         private TxSimulationPlayer _player;
-
-        // === SNAPSHOT ===
         private readonly TxSnapshot _snapshot;
         private readonly TxApplySnapshotParams _snapParams;
-
-        // === TRACK CREATED OPERATIONS ===
         private List<TxContinuousRoboticOperation> _createdOps = new List<TxContinuousRoboticOperation>();
         private List<TxDeviceOperation> _created_deviceOps = new List<TxDeviceOperation>();
-
-        // === COMMUNICATION ===
         private readonly CommunicationManager _communicator;
         private readonly RequestHandler _handler;
 
-        // === CRATE CONTENTS TRACKING ===
         private int _boxesInCrate3TypeA = 0;
         private int _boxesInCrate2TypeB = 0;
-        private const int MAX_BOXES_PER_CRATE = 2;
 
-        // === EPISODE STATE ===
+        // Episode state — robot actions
         private int _stepCount;
-        private bool _actionZeroDone;
-        private bool _actionOneDone;
-        private bool _actionTwoDone;
-        private bool _actionFiveDone;
-        private bool _actionSixDone;
-        private bool _actionSevenDone;
-        private bool _actionEightDone;
+        private bool _action0Done;   // fill boxes A batch 1
+        private bool _action1Done;   // fill boxes B batch 1
+        private bool _action2Done;   // put boxes A batch 1 in crate 3
+        private bool _action5Done;   // crates on slider
+        private bool _action6Done;   // remove crate 3
+        private bool _action7Done;   // put boxes B batch 1 in crate 2
+        private bool _action8Done;   // remove crate 2
+        private bool _action9Done;   // fill boxes A batch 2
+        private bool _action10Done;  // put boxes A batch 2 in crate 3
+        private bool _action11Done;  // fill boxes B batch 2
+        private bool _action12Done;  // put boxes B batch 2 in crate 2
         private double _totalRobotTime;
         private int _episodeId = 0;
         private string _currentGripper = "Crate_gripper";
         private List<int> _available_places_on_slider = new List<int> { 1, 1, 1 };
 
-        // === FRAME NAMES ===
-        private readonly string _pickA1 = "Pick_A_1";
-        private readonly string _pickA2 = "Pick_A_2";
-        private readonly string _placeA1 = "Place_A_1";
-        private readonly string _placeA2 = "Place_A_2";
-        private readonly string _pickB1 = "Pick_B_1";
-        private readonly string _pickB2 = "Pick_B_2";
-        private readonly string _placeB1 = "Place_B_1";
-        private readonly string _placeB2 = "Place_B_2";
-        private readonly string _pickBoxA1 = "pick_box_A_1";
-        private readonly string _pickBoxA2 = "pick_box_A_2";
-        private readonly string _pickBoxB1 = "pick_box_B_1";
-        private readonly string _pickBoxB2 = "pick_box_B_2";
-        private readonly string _placeBox1Crate3 = "crate_3_place1";
-        private readonly string _placeBox2Crate3 = "crate_3_place2";
-        private readonly string _placeBox1Crate2 = "crate_2_place1";
-        private readonly string _placeBox2Crate2 = "crate_2_place2";
+        // Frame names — batch 1
+        private readonly string _pickA1 = "Pick_A_1"; private readonly string _pickA2 = "Pick_A_2";
+        private readonly string _placeA1 = "Place_A_1"; private readonly string _placeA2 = "Place_A_2";
+        private readonly string _pickB1 = "Pick_B_1"; private readonly string _pickB2 = "Pick_B_2";
+        private readonly string _placeB1 = "Place_B_1"; private readonly string _placeB2 = "Place_B_2";
+        private readonly string _pickBoxA1 = "pick_box_A_1"; private readonly string _pickBoxA2 = "pick_box_A_2";
+        private readonly string _pickBoxB1 = "pick_box_B_1"; private readonly string _pickBoxB2 = "pick_box_B_2";
+        private readonly string _placeBox1Crate3 = "crate_3_place1"; private readonly string _placeBox2Crate3 = "crate_3_place2";
+        private readonly string _placeBox1Crate2 = "crate_2_place1"; private readonly string _placeBox2Crate2 = "crate_2_place2";
+
+        // Frame names — batch 2
+        private readonly string _pickA3 = "Pick_A_3"; private readonly string _pickA4 = "Pick_A_4";                 
+        private readonly string _placeA3 = "Place_A_3"; private readonly string _placeA4 = "Place_A_4";            
+        private readonly string _pickB3 = "Pick_B_3"; private readonly string _pickB4 = "Pick_B_4";              
+        private readonly string _placeB3 = "Place_B_3"; private readonly string _placeB4 = "Place_B_4";            
+        private readonly string _pickBoxA3 = "pick_box_A_3"; private readonly string _pickBoxA4 = "pick_box_A_4";  
+        private readonly string _pickBoxB3 = "pick_box_B_3"; private readonly string _pickBoxB4 = "pick_box_B_4";   
+        private readonly string _placeBox3Crate3 = "crate_3_place3"; private readonly string _placeBox4Crate3 = "crate_3_place4"; 
+        private readonly string _placeBox3Crate2 = "crate_2_place3"; private readonly string _placeBox4Crate2 = "crate_2_place4";
+
+        // Crate frames
         private readonly string _pickCrate3 = "pick_top_crate_frame";
         private readonly string _pickCrate2 = "pick_middle_crate_frame";
         private readonly string _pickCrate1 = "pick_low_crate_frame";
         private readonly string _placeCrates = "place_crate";
         private readonly string _crateLowOutfeed = "crate_low_on_table_outfeed";
         private readonly string _crate2Outfeed = "crate_middle_on_table_outfeed";
-        private readonly List<string> slider_frames = new List<string>
-        {
-            "crate_low_on_slider_station",
-            "crate_middle_on_slider_station",
-            "crate_top_on_slider_station"
-        };
-        private readonly string _gripperName = "Smart_gripper";
+        private readonly List<string> slider_frames = new List<string> { "crate_low_on_slider_station", "crate_middle_on_slider_station", "crate_top_on_slider_station" };
 
         // =====================================================
         //  CONSTRUCTOR
         // =====================================================
-
         public RLEnvironment(string robotName, string lineName, string humanName)
         {
             var objects = TxApplication.ActiveDocument.GetObjectsByName(robotName);
-            if (objects.Count == 0) throw new Exception($"Robot '{robotName}' not found.");
             _robot = objects[0] as TxRobot;
-            if (_robot == null) throw new Exception($"'{robotName}' is not a TxRobot.");
-
             var objects_line = TxApplication.ActiveDocument.GetObjectsByName(lineName);
-            if (objects_line.Count == 0) throw new Exception($"Line '{lineName}' not found.");
             _line = objects_line[0] as TxDevice;
-            if (_line == null) throw new Exception($"'{lineName}' is not a TxDevice.");
-
             var humanObjects = TxApplication.ActiveDocument.GetObjectsByName(humanName);
-            if (humanObjects.Count == 0) throw new Exception("Human proxy not found.");
             _humanProxy = humanObjects[0] as TxHuman;
 
             _robotResource = new TxResources();
@@ -462,72 +386,45 @@ namespace ProcessSimulateSnippets
 
             _debugPanel = new RLDebugPanel();
             _debugPanel.Show();
-
-            System.Diagnostics.Trace.WriteLine("[RL] Environment created. Waiting for Python...");
         }
 
         // =====================================================
         //  RESET
         // =====================================================
-
         public ObservationPacket Reset()
         {
-            System.Diagnostics.Trace.WriteLine("[RL] === RESET ===");
-
-            foreach (var op in _createdOps)
-            { try { if (op != null) op.Delete(); } catch { } }
+            foreach (var op in _createdOps) { try { op?.Delete(); } catch { } }
             _createdOps.Clear();
-
-            foreach (var op in _created_deviceOps)
-            { try { if (op != null) op.Delete(); } catch { } }
+            foreach (var op in _created_deviceOps) { try { op?.Delete(); } catch { } }
             _created_deviceOps.Clear();
 
             _snapshot.Apply(_snapParams);
             TxApplication.RefreshDisplay();
 
             _stepCount = 0;
-            _actionZeroDone = false;
-            _actionOneDone = false;
-            _actionTwoDone = false;
-            _actionFiveDone = false;
-            _actionSixDone = false;
-            _actionSevenDone = false;
-            _actionEightDone = false;
-            _totalRobotTime = 0.0;
-            _episodeId++;
+            _action0Done = false; _action1Done = false; _action2Done = false;
+            _action5Done = false; _action6Done = false; _action7Done = false; _action8Done = false;
+            _action9Done = false; _action10Done = false; _action11Done = false; _action12Done = false;
+            _totalRobotTime = 0.0; _episodeId++;
             _currentGripper = "Crate_gripper";
-            _available_places_on_slider[0] = 1;
-            _available_places_on_slider[1] = 1;
-            _available_places_on_slider[2] = 1;
-            _boxesInCrate3TypeA = 0;
-            _boxesInCrate2TypeB = 0;
+            _available_places_on_slider[0] = 1; _available_places_on_slider[1] = 1; _available_places_on_slider[2] = 1;
+            _boxesInCrate3TypeA = 0; _boxesInCrate2TypeB = 0;
 
-            // Reset all human flags
-            _piecesAAvailable = false;
-            _piecesBAvailable = false;
-            _cratesAvailable = false;
-            _smallBoxesACreated = false;
-            _smallBoxesBCreated = false;
-            _smallBoxesAClosed = false;
-            _smallBoxesBClosed = false;
+            _piecesAAvailable = false; _piecesBAvailable = false; _cratesAvailable = false;
+            _smallBoxesA1Created = false; _smallBoxesB1Created = false;
+            _smallBoxesA1Closed = false; _smallBoxesB1Closed = false;
+            _smallBoxesA2Created = false; _smallBoxesB2Created = false;
+            _smallBoxesA2Closed = false; _smallBoxesB2Closed = false;
 
-            // Reset human task tracking
-            _humanTaskPiecesADone = false;
-            _humanTaskPiecesBDone = false;
-            _humanTaskCratesDone = false;
-            _humanTaskCreateBoxesADone = false;
-            _humanTaskCreateBoxesBDone = false;
-            _humanTaskCloseBoxesADone = false;
-            _humanTaskCloseBoxesBDone = false;
+            _htPiecesADone = false; _htPiecesBDone = false; _htCratesDone = false;
+            _htCreateBoxesA1Done = false; _htCreateBoxesB1Done = false;
+            _htCloseBoxesA1Done = false; _htCloseBoxesB1Done = false;
+            _htCreateBoxesA2Done = false; _htCreateBoxesB2Done = false;
+            _htCloseBoxesA2Done = false; _htCloseBoxesB2Done = false;
 
-            _humanBusy = false;
-            _humanWaiting = false;
-            _humanWaitRemaining = 0.0;
-            _humanWaypointIndex = 0;
-            _humanProgress = 0.0;
-            _currentHumanTask = null;
+            _humanBusy = false; _humanWaiting = false; _humanWaitRemaining = 0.0;
+            _humanWaypointIndex = 0; _humanProgress = 0.0; _currentHumanTask = null;
 
-            // Place human at home
             var homeObj = TxApplication.ActiveDocument.GetObjectsByName(_humanHomeFrame);
             TxFrame homeFrame = homeObj[0] as TxFrame;
             _humanProxy.AbsoluteLocation = new TxTransformation(homeFrame.AbsoluteLocation);
@@ -539,14 +436,9 @@ namespace ProcessSimulateSnippets
             _player.AskUserForReset(false);
             _player.DoOnlyUnscheduledReset(true);
 
-            _debugPanel.UpdateState(
-                _episodeId, _stepCount, -1, 0.0,
-                _currentGripper, _actionZeroDone, _actionOneDone, _actionFiveDone,
-                _totalRobotTime,
-                _available_places_on_slider[0],
-                _available_places_on_slider[1],
-                _available_places_on_slider[2]
-            );
+            _debugPanel.UpdateState(_episodeId, _stepCount, -1, 0.0, _currentGripper,
+                _action0Done, _action1Done, _action5Done, _totalRobotTime,
+                _available_places_on_slider[0], _available_places_on_slider[1], _available_places_on_slider[2]);
 
             return BuildObservation();
         }
@@ -554,742 +446,468 @@ namespace ProcessSimulateSnippets
         // =====================================================
         //  HUMAN TASK SELECTION
         // =====================================================
-
         private void PickNextHumanTask()
         {
-            List<HumanTask> feasibleTasks = new List<HumanTask>();
+            List<HumanTask> feasible = new List<HumanTask>();
 
-            // Delivery tasks (no preconditions beyond one-shot)
-            if (!_humanTaskPiecesADone)
-                feasibleTasks.Add(_humanTaskPiecesA);
-            if (!_humanTaskPiecesBDone)
-                feasibleTasks.Add(_humanTaskPiecesB_def);
-            if (!_humanTaskCratesDone)
-                feasibleTasks.Add(_humanTaskCrates);
+            if (!_htPiecesADone) feasible.Add(_htPiecesA);
+            if (!_htPiecesBDone) feasible.Add(_htPiecesB);
+            if (!_htCratesDone) feasible.Add(_htCrates);
 
-            // Create boxes tasks (no preconditions beyond one-shot)
-            if (!_humanTaskCreateBoxesADone)
-                feasibleTasks.Add(_humanTaskCreateBoxesA);
-            if (!_humanTaskCreateBoxesBDone)
-                feasibleTasks.Add(_humanTaskCreateBoxesB);
+            // Batch 1 create: no precondition
+            if (!_htCreateBoxesA1Done) feasible.Add(_htCreateBoxesA1);
+            if (!_htCreateBoxesB1Done) feasible.Add(_htCreateBoxesB1);
 
-            // Close boxes A: requires robot action 0 done (pieces A placed in boxes)
-            if (!_humanTaskCloseBoxesADone && _actionZeroDone)
-                feasibleTasks.Add(_humanTaskCloseBoxesA);
+            // Batch 1 close: requires robot filled them
+            if (!_htCloseBoxesA1Done && _action0Done) feasible.Add(_htCloseBoxesA1);
+            if (!_htCloseBoxesB1Done && _action1Done) feasible.Add(_htCloseBoxesB1);
 
-            // Close boxes B: requires robot action 1 done (pieces B placed in boxes)
-            if (!_humanTaskCloseBoxesBDone && _actionOneDone)
-                feasibleTasks.Add(_humanTaskCloseBoxesB);
+            // Batch 2 create: requires batch 1 placed in crate
+            if (!_htCreateBoxesA2Done && _action2Done) feasible.Add(_htCreateBoxesA2);
+            if (!_htCreateBoxesB2Done && _action7Done) feasible.Add(_htCreateBoxesB2);
 
-            // Wait is always feasible
-            feasibleTasks.Add(_humanTaskWait);
+            // Batch 2 close: requires robot filled them
+            if (!_htCloseBoxesA2Done && _action9Done) feasible.Add(_htCloseBoxesA2);
+            if (!_htCloseBoxesB2Done && _action11Done) feasible.Add(_htCloseBoxesB2);
 
-            int idx = _humanRng.Next(feasibleTasks.Count);
-            _currentHumanTask = feasibleTasks[idx];
+            feasible.Add(_htWait);
 
-            System.Diagnostics.Trace.WriteLine($"[RL] Human selected task: {_currentHumanTask.Name}");
+            _currentHumanTask = feasible[_humanRng.Next(feasible.Count)];
+            System.Diagnostics.Trace.WriteLine($"[RL] Human selected: {_currentHumanTask.Name}");
 
             if (_currentHumanTask.IsWaitTask)
-            {
-                _humanBusy = true;
-                _humanWaiting = true;
-                _humanWaitRemaining = _currentHumanTask.WaitDuration;
-                System.Diagnostics.Trace.WriteLine($"[RL] Human waiting for {_humanWaitRemaining:F1}s");
-            }
+            { _humanBusy = true; _humanWaiting = true; _humanWaitRemaining = _currentHumanTask.WaitDuration; }
             else
-            {
-                StartHumanTask();
-            }
+            { StartHumanTask(); }
         }
 
         private void StartHumanTask()
-        {
-            _humanBusy = true;
-            _humanWaiting = false;
-            _humanWaypointIndex = 0;
-            _humanProgress = 0.0;
-            System.Diagnostics.Trace.WriteLine($"[RL] Human starting task: {_currentHumanTask.Name}");
-            SetNextHumanSegment();
-        }
-
-        // =====================================================
-        //  HUMAN MOVEMENT
-        // =====================================================
+        { _humanBusy = true; _humanWaiting = false; _humanWaypointIndex = 0; _humanProgress = 0.0; SetNextHumanSegment(); }
 
         private void SetNextHumanSegment()
         {
             _humanWaypointIndex++;
             if (_humanWaypointIndex >= _currentHumanTask.Waypoints.Count)
             {
-                _humanBusy = false;
-                _humanWaiting = false;
-
-                // Mark one-shot tasks as done
-                if (_currentHumanTask == _humanTaskPiecesA) _humanTaskPiecesADone = true;
-                if (_currentHumanTask == _humanTaskPiecesB_def) _humanTaskPiecesBDone = true;
-                if (_currentHumanTask == _humanTaskCrates) _humanTaskCratesDone = true;
-                if (_currentHumanTask == _humanTaskCreateBoxesA) _humanTaskCreateBoxesADone = true;
-                if (_currentHumanTask == _humanTaskCreateBoxesB) _humanTaskCreateBoxesBDone = true;
-                if (_currentHumanTask == _humanTaskCloseBoxesA) _humanTaskCloseBoxesADone = true;
-                if (_currentHumanTask == _humanTaskCloseBoxesB) _humanTaskCloseBoxesBDone = true;
-
-                System.Diagnostics.Trace.WriteLine($"[RL] Human completed task: {_currentHumanTask.Name}");
+                _humanBusy = false; _humanWaiting = false;
+                if (_currentHumanTask == _htPiecesA) _htPiecesADone = true;
+                if (_currentHumanTask == _htPiecesB) _htPiecesBDone = true;
+                if (_currentHumanTask == _htCrates) _htCratesDone = true;
+                if (_currentHumanTask == _htCreateBoxesA1) _htCreateBoxesA1Done = true;
+                if (_currentHumanTask == _htCreateBoxesB1) _htCreateBoxesB1Done = true;
+                if (_currentHumanTask == _htCloseBoxesA1) _htCloseBoxesA1Done = true;
+                if (_currentHumanTask == _htCloseBoxesB1) _htCloseBoxesB1Done = true;
+                if (_currentHumanTask == _htCreateBoxesA2) _htCreateBoxesA2Done = true;
+                if (_currentHumanTask == _htCreateBoxesB2) _htCreateBoxesB2Done = true;
+                if (_currentHumanTask == _htCloseBoxesA2) _htCloseBoxesA2Done = true;
+                if (_currentHumanTask == _htCloseBoxesB2) _htCloseBoxesB2Done = true;
                 PickNextHumanTask();
                 return;
             }
-
             _humanSegmentStart = new TxTransformation(_humanProxy.AbsoluteLocation);
-
-            string targetFrameName = _currentHumanTask.Waypoints[_humanWaypointIndex];
-            var obj = TxApplication.ActiveDocument.GetObjectsByName(targetFrameName);
-            TxFrame targetFrame = obj[0] as TxFrame;
-            _humanSegmentGoal = new TxTransformation(targetFrame.AbsoluteLocation);
-
-            TxVector start = _humanSegmentStart.Translation;
-            TxVector end = _humanSegmentGoal.Translation;
-            _humanPathLength = Math.Sqrt(
-                (end.X - start.X) * (end.X - start.X) +
-                (end.Y - start.Y) * (end.Y - start.Y));
+            string target = _currentHumanTask.Waypoints[_humanWaypointIndex];
+            TxFrame tf = TxApplication.ActiveDocument.GetObjectsByName(target)[0] as TxFrame;
+            _humanSegmentGoal = new TxTransformation(tf.AbsoluteLocation);
+            TxVector s = _humanSegmentStart.Translation, e = _humanSegmentGoal.Translation;
+            _humanPathLength = Math.Sqrt((e.X - s.X) * (e.X - s.X) + (e.Y - s.Y) * (e.Y - s.Y));
             _humanProgress = 0.0;
-
-            System.Diagnostics.Trace.WriteLine($"[RL] Human heading to: {targetFrameName}");
         }
 
-        private void UpdateHumanMovement(double deltaTime)
+        private void UpdateHumanMovement(double dt)
         {
             if (!_humanBusy) return;
-
             if (_humanWaiting)
             {
-                _humanWaitRemaining -= deltaTime;
-                if (_humanWaitRemaining <= 0.0)
+                _humanWaitRemaining -= dt;
+                if (_humanWaitRemaining <= 0)
                 {
                     _humanWaiting = false;
-                    if (_currentHumanTask != null && _currentHumanTask.IsWaitTask)
-                    {
-                        _humanBusy = false;
-                        System.Diagnostics.Trace.WriteLine("[RL] Human finished waiting.");
-                        PickNextHumanTask();
-                    }
-                    else
-                    {
-                        SetNextHumanSegment();
-                    }
+                    if (_currentHumanTask != null && _currentHumanTask.IsWaitTask) { _humanBusy = false; PickNextHumanTask(); }
+                    else SetNextHumanSegment();
                 }
                 return;
             }
-
-            if (_humanPathLength < 1.0)
-            {
-                PerformHumanActionAtWaypoint();
-                if (!_humanWaiting)
-                    SetNextHumanSegment();
-                return;
-            }
-
-            double distanceMoved = _humanSpeed * deltaTime;
-            _humanProgress += distanceMoved / _humanPathLength;
-
+            if (_humanPathLength < 1.0) { PerformHumanActionAtWaypoint(); if (!_humanWaiting) SetNextHumanSegment(); return; }
+            _humanProgress += _humanSpeed * dt / _humanPathLength;
             if (_humanProgress >= 1.0)
             {
                 _humanProxy.AbsoluteLocation = new TxTransformation(_humanSegmentGoal);
                 PerformHumanActionAtWaypoint();
-                if (!_humanWaiting)
-                    SetNextHumanSegment();
+                if (!_humanWaiting) SetNextHumanSegment();
             }
             else
             {
-                TxVector start = _humanSegmentStart.Translation;
-                TxVector goal = _humanSegmentGoal.Translation;
-                double x = start.X + (goal.X - start.X) * _humanProgress;
-                double y = start.Y + (goal.Y - start.Y) * _humanProgress;
-                double z = _humanProxy.AbsoluteLocation.Translation.Z;
-
-                TxTransformation newPos = new TxTransformation(_humanSegmentGoal);
-                newPos.Translation = new TxVector(x, y, z);
-                _humanProxy.AbsoluteLocation = newPos;
+                TxVector s = _humanSegmentStart.Translation, g = _humanSegmentGoal.Translation;
+                TxTransformation np = new TxTransformation(_humanSegmentGoal);
+                np.Translation = new TxVector(s.X + (g.X - s.X) * _humanProgress, s.Y + (g.Y - s.Y) * _humanProgress, _humanProxy.AbsoluteLocation.Translation.Z);
+                _humanProxy.AbsoluteLocation = np;
             }
         }
 
         private void PerformHumanActionAtWaypoint()
         {
             if (_currentHumanTask == null) return;
-
-            bool actionPerformed = false;
-
-            foreach (var action in _currentHumanTask.Actions)
+            bool acted = false;
+            foreach (var a in _currentHumanTask.Actions)
             {
-                if (action.WaypointIndex == _humanWaypointIndex)
+                if (a.WaypointIndex == _humanWaypointIndex)
                 {
-                    for (int i = 0; i < action.RelocateResources.Count; i++)
-                    {
-                        _robotResource.PlaceResourceAccordingToFrame(
-                            action.RelocateResources[i], action.RelocateFrames[i]);
-                        System.Diagnostics.Trace.WriteLine(
-                            $"[RL] Human relocated '{action.RelocateResources[i]}' to '{action.RelocateFrames[i]}'");
-                    }
-
-                    foreach (string res in action.UnblankResources)
-                    {
-                        _robotResource.ChangeVisibility(res, false);
-                        System.Diagnostics.Trace.WriteLine($"[RL] Human unblanked '{res}'");
-                    }
-
-                    foreach (string res in action.BlankResources)
-                    {
-                        _robotResource.ChangeVisibility(res, true);
-                        System.Diagnostics.Trace.WriteLine($"[RL] Human blanked '{res}'");
-                    }
-
-                    if (!string.IsNullOrEmpty(action.UnlocksFlag))
-                        SetHumanFlag(action.UnlocksFlag, true);
-
-                    actionPerformed = true;
+                    for (int i = 0; i < a.RelocateResources.Count; i++)
+                        _robotResource.PlaceResourceAccordingToFrame(a.RelocateResources[i], a.RelocateFrames[i]);
+                    foreach (string r in a.UnblankResources) _robotResource.ChangeVisibility(r, false);
+                    foreach (string r in a.BlankResources) _robotResource.ChangeVisibility(r, true);
+                    if (!string.IsNullOrEmpty(a.UnlocksFlag)) SetHumanFlag(a.UnlocksFlag, true);
+                    acted = true;
                 }
             }
-
-            if (actionPerformed)
-            {
-                _humanWaiting = true;
-                _humanWaitRemaining = WAYPOINT_PAUSE;
-                System.Diagnostics.Trace.WriteLine($"[RL] Human pausing for {WAYPOINT_PAUSE:F1}s after waypoint action.");
-            }
+            if (acted) { _humanWaiting = true; _humanWaitRemaining = WAYPOINT_PAUSE; }
         }
 
-        private void SetHumanFlag(string flagName, bool value)
+        private void SetHumanFlag(string f, bool v)
         {
-            switch (flagName)
+            switch (f)
             {
-                case "piecesAAvailable": _piecesAAvailable = value; break;
-                case "piecesBAvailable": _piecesBAvailable = value; break;
-                case "cratesAvailable": _cratesAvailable = value; break;
-                case "smallBoxesACreated": _smallBoxesACreated = value; break;
-                case "smallBoxesBCreated": _smallBoxesBCreated = value; break;
-                case "smallBoxesAClosed": _smallBoxesAClosed = value; break;
-                case "smallBoxesBClosed": _smallBoxesBClosed = value; break;
+                case "piecesAAvailable": _piecesAAvailable = v; break;
+                case "piecesBAvailable": _piecesBAvailable = v; break;
+                case "cratesAvailable": _cratesAvailable = v; break;
+                case "smallBoxesA1Created": _smallBoxesA1Created = v; break;
+                case "smallBoxesB1Created": _smallBoxesB1Created = v; break;
+                case "smallBoxesA1Closed": _smallBoxesA1Closed = v; break;
+                case "smallBoxesB1Closed": _smallBoxesB1Closed = v; break;
+                case "smallBoxesA2Created": _smallBoxesA2Created = v; break;
+                case "smallBoxesB2Created": _smallBoxesB2Created = v; break;
+                case "smallBoxesA2Closed": _smallBoxesA2Closed = v; break;
+                case "smallBoxesB2Closed": _smallBoxesB2Closed = v; break;
             }
-            System.Diagnostics.Trace.WriteLine($"[RL] Flag '{flagName}' set to {value}");
         }
 
         private void OnTimeIntervalReached(object sender, TxSimulationPlayer_TimeIntervalReachedEventArgs args)
         {
-            double currentSimTime = args.CurrentTime;
-            double deltaTime;
-            if (currentSimTime < _lastSimTime)
-                deltaTime = currentSimTime;
-            else
-                deltaTime = currentSimTime - _lastSimTime;
-            _lastSimTime = currentSimTime;
-            UpdateHumanMovement(deltaTime);
+            double t = args.CurrentTime;
+            double dt = (t < _lastSimTime) ? t : t - _lastSimTime;
+            _lastSimTime = t;
+            UpdateHumanMovement(dt);
         }
 
         // =====================================================
         //  STEP
         // =====================================================
-
         public StepResult Step(int actionId)
         {
-            System.Diagnostics.Trace.WriteLine($"[RL] Step {_stepCount + 1}, Action: {actionId}");
-
             _stepCount++;
-            bool terminated = false;
-            bool truncated = false;
-            double reward = 0.0;
+            bool hasS = _currentGripper == "Smart_gripper";
+            bool hasC = _currentGripper == "Crate_gripper";
 
-            bool hasSmartGripper = _currentGripper == "Smart_gripper";
-            bool hasCrateGripper = _currentGripper == "Crate_gripper";
+            // FEASIBILITY CHECKS
+            // 0: fill boxes A batch 1
+            if (actionId == 0 && (_action0Done || !hasS || !_piecesAAvailable || !_smallBoxesA1Created))
+            { UpdateDebug(0, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 1: fill boxes B batch 1
+            if (actionId == 1 && (_action1Done || !hasS || !_piecesBAvailable || !_smallBoxesB1Created))
+            { UpdateDebug(1, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 2: put boxes A batch 1 in crate 3 (needs closed)
+            if (actionId == 2 && (!_action0Done || !_action5Done || !hasS || _action2Done || !_smallBoxesA1Closed))
+            { UpdateDebug(2, -10); return new StepResult(BuildObservation(), -10, true, false); }
+            // 3: mount smart gripper
+            if (actionId == 3 && hasS) { UpdateDebug(3, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 4: mount crate gripper
+            if (actionId == 4 && hasC) { UpdateDebug(4, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 5: crates on slider
+            if (actionId == 5 && (_action5Done || !hasC || !_cratesAvailable))
+            { UpdateDebug(5, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 6: remove crate 3 (needs 4 boxes: batch 1 + batch 2)
+            if (actionId == 6 && (!hasC || !_action2Done || !_action10Done || _action6Done || _boxesInCrate3TypeA < MAX_BOXES_PER_CRATE))
+            { UpdateDebug(6, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 7: put boxes B batch 1 in crate 2 (needs closed)
+            if (actionId == 7 && (!_action1Done || !_action5Done || !hasS || _action7Done || !_smallBoxesB1Closed))
+            { UpdateDebug(7, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 8: remove crate 2 (needs 4 boxes: batch 1 + batch 2)
+            if (actionId == 8 && (!hasC || !_action6Done || !_action7Done || !_action12Done || _action8Done || _boxesInCrate2TypeB < MAX_BOXES_PER_CRATE))
+            { UpdateDebug(8, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 9: fill boxes A batch 2
+            if (actionId == 9 && (_action9Done || !hasS || !_piecesAAvailable || !_smallBoxesA2Created))
+            { UpdateDebug(9, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 10: put boxes A batch 2 in crate 3 (needs closed)
+            if (actionId == 10 && (!_action9Done || !_action5Done || !hasS || _action10Done || !_smallBoxesA2Closed || !_action2Done))
+            { UpdateDebug(10, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 11: fill boxes B batch 2
+            if (actionId == 11 && (_action11Done || !hasS || !_piecesBAvailable || !_smallBoxesB2Created))
+            { UpdateDebug(11, -5); return new StepResult(BuildObservation(), -5, true, false); }
+            // 12: put boxes B batch 2 in crate 2 (needs closed)
+            if (actionId == 12 && (!_action11Done || !_action5Done || !hasS || _action12Done || !_smallBoxesB2Closed || !_action7Done))
+            { UpdateDebug(12, -5); return new StepResult(BuildObservation(), -5, true, false); }
 
-            // --- FEASIBILITY CHECKS ---
-            // Action 0: needs smart gripper + pieces A available + small boxes A created + not already done
-            if (actionId == 0 && (_actionZeroDone || !hasSmartGripper || !_piecesAAvailable || !_smallBoxesACreated))
-            {
-                UpdateDebug(0, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            // Action 1: needs smart gripper + pieces B available + small boxes B created + not already done
-            if (actionId == 1 && (_actionOneDone || !hasSmartGripper || !_piecesBAvailable || !_smallBoxesBCreated))
-            {
-                UpdateDebug(1, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            // Action 2: needs actions 0,1,5 done + smart gripper + boxes A closed + not already done
-            if (actionId == 2 && (!_actionZeroDone || !_actionOneDone || !_actionFiveDone ||
-                                   !hasSmartGripper || _actionTwoDone || !_smallBoxesAClosed))
-            {
-                UpdateDebug(2, -10.0);
-                return new StepResult(BuildObservation(), -10.0, true, false);
-            }
-
-            if (actionId == 3 && hasSmartGripper)
-            {
-                UpdateDebug(3, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            if (actionId == 4 && hasCrateGripper)
-            {
-                UpdateDebug(4, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            if (actionId == 5 && (_actionFiveDone || !hasCrateGripper || !_cratesAvailable))
-            {
-                UpdateDebug(5, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            if (actionId == 6 && (!hasCrateGripper || !_actionTwoDone ||
-                       _boxesInCrate3TypeA < MAX_BOXES_PER_CRATE || _actionSixDone))
-            {
-                UpdateDebug(6, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            // Action 7: needs action 5 done + smart gripper + action 1 done + boxes B closed + not already done
-            if (actionId == 7 && (!_actionFiveDone || !hasSmartGripper ||
-                                   !_actionOneDone || _actionSevenDone || !_smallBoxesBClosed))
-            {
-                UpdateDebug(7, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            if (actionId == 8 && (!_actionSixDone || !hasCrateGripper ||
-                                   !_actionSevenDone || _actionEightDone))
-            {
-                UpdateDebug(8, -5.0);
-                return new StepResult(BuildObservation(), -5.0, true, false);
-            }
-
-            // --- EXECUTE ACTIONS ---
             try
             {
-                List<string> pickFrames = new List<string>();
-                List<string> placeFrames = new List<string>();
-                int n_sequential_op = 0;
-                string opName = "rl_op_" + _stepCount + "_" + _episodeId;
-                string base_opName = "base_op_" + _stepCount + "_" + _episodeId;
-                string home_opName = "home_op_" + _stepCount + "_" + _episodeId;
+                List<string> pick = new List<string>(), place = new List<string>();
+                int nOps = 0;
+                string opN = "rl_op_" + _stepCount + "_" + _episodeId;
+                string baseN = "base_op_" + _stepCount + "_" + _episodeId;
+                string homeN = "home_op_" + _stepCount + "_" + _episodeId;
 
-                TxPose pp_station_pose = _line.GetPoseByName(pp_station);
-                var pp_pose_rob = (double)pp_station_pose.PoseData.JointValues[0];
-                TxPose pp_station_pose_bic = _line.GetPoseByName(pp_box_in_crate_station);
-                var pp_pose_rob_bic = (double)pp_station_pose_bic.PoseData.JointValues[0];
-                TxPose tool_chan_station = _line.GetPoseByName(tool_change_station);
-                var tool_chan_stat = (double)tool_chan_station.PoseData.JointValues[0];
-                TxPose load_crate_station = _line.GetPoseByName(load_crates_station);
-                var load_crat_stat = (double)load_crate_station.PoseData.JointValues[0];
-                TxPose unload_crate_station = _line.GetPoseByName(unload_crates_station);
-                var unload_crat_stat = (double)unload_crate_station.PoseData.JointValues[0];
-                TxPose unload_crate2_station_pose = _line.GetPoseByName(unload_crate2_station);
-                var unload_crat2_stat = (double)unload_crate2_station_pose.PoseData.JointValues[0];
+                var ppP = (double)_line.GetPoseByName(pp_station).PoseData.JointValues[0];
+                var bicP = (double)_line.GetPoseByName(pp_box_in_crate_station).PoseData.JointValues[0];
+                var tcP = (double)_line.GetPoseByName(tool_change_station).PoseData.JointValues[0];
+                var lcP = (double)_line.GetPoseByName(load_crates_station).PoseData.JointValues[0];
+                var ulP = (double)_line.GetPoseByName(unload_crates_station).PoseData.JointValues[0];
 
-                bool check_pos = false;
-                string op_type = "";
-                double currentY = _robot.AbsoluteLocation.Translation.Y;
-                string rob_pos = "";
-                string gripper_to_mount = "";
-                string gripper_to_unmount = "";
-                string home_pose = "";
-                bool optimize_config = false;
+                bool chk = false; string opT = "", rPos = "", gMount = "", gUnmount = "", hPose = "";
+                bool optCfg = false;
+                double curY = _robot.AbsoluteLocation.Translation.Y;
 
                 switch (actionId)
                 {
-                    case 0:
-                        pickFrames.Add(_pickA1); pickFrames.Add(_pickA2);
-                        placeFrames.Add(_placeA1); placeFrames.Add(_placeA2);
-                        n_sequential_op = 2; op_type = "pp"; home_pose = pp_home;
-                        optimize_config = false;
-                        if (currentY != pp_pose_rob) { check_pos = true; rob_pos = pp_station; }
-                        //_actionZeroDone = true;
+                    case 0: // fill boxes A batch 1
+                        pick.Add(_pickA1); pick.Add(_pickA2); place.Add(_placeA1); place.Add(_placeA2);
+                        nOps = 2; opT = "pp"; hPose = pp_home;
+                        if (curY != ppP) { chk = true; rPos = pp_station; }
                         break;
-
-                    case 1:
-                        pickFrames.Add(_pickB1); pickFrames.Add(_pickB2);
-                        placeFrames.Add(_placeB1); placeFrames.Add(_placeB2);
-                        n_sequential_op = 2; op_type = "pp"; home_pose = pp_home;
-                        optimize_config = false;
-                        if (currentY != pp_pose_rob) { check_pos = true; rob_pos = pp_station; }
-                        //_actionOneDone = true;
+                    case 1: // fill boxes B batch 1
+                        pick.Add(_pickB1); pick.Add(_pickB2); place.Add(_placeB1); place.Add(_placeB2);
+                        nOps = 2; opT = "pp"; hPose = pp_home;
+                        if (curY != ppP) { chk = true; rPos = pp_station; }
                         break;
-
-                    case 2:
-                        pickFrames.Add(_pickBoxA1); pickFrames.Add(_pickBoxA2);
-                        placeFrames.Add(_placeBox1Crate3); placeFrames.Add(_placeBox2Crate3);
-                        n_sequential_op = 2; op_type = "pp"; home_pose = pp_home;
-                        optimize_config = true;
-                        if (currentY != pp_pose_rob_bic) { check_pos = true; rob_pos = pp_box_in_crate_station; }
-                        _actionTwoDone = true;
-                        _boxesInCrate3TypeA += n_sequential_op;
+                    case 2: // put boxes A batch 1 in crate 3
+                        pick.Add(_pickBoxA1); pick.Add(_pickBoxA2); place.Add(_placeBox1Crate3); place.Add(_placeBox2Crate3);
+                        nOps = 2; opT = "pp"; hPose = pp_home; optCfg = true;
+                        if (curY != bicP) { chk = true; rPos = pp_box_in_crate_station; }
+                        //_action2Done = true; 
+                        _boxesInCrate3TypeA += 2;
                         break;
-
                     case 3:
-                        op_type = "tc"; gripper_to_mount = "Smart_gripper"; gripper_to_unmount = "Crate_gripper";
-                        home_pose = tool_change_home; optimize_config = false;
-                        if (currentY != tool_chan_stat) { check_pos = true; rob_pos = tool_change_station; }
-                        _currentGripper = "Smart_gripper";
-                        break;
-
+                        opT = "tc"; gMount = "Smart_gripper"; gUnmount = "Crate_gripper"; hPose = tool_change_home;
+                        if (curY != tcP) { chk = true; rPos = tool_change_station; }
+                        _currentGripper = "Smart_gripper"; break;
                     case 4:
-                        op_type = "tc"; gripper_to_unmount = "Smart_gripper"; gripper_to_mount = "Crate_gripper";
-                        home_pose = tool_change_home; optimize_config = false;
-                        if (currentY != tool_chan_stat) { check_pos = true; rob_pos = tool_change_station; }
-                        _currentGripper = "Crate_gripper";
+                        opT = "tc"; gUnmount = "Smart_gripper"; gMount = "Crate_gripper"; hPose = tool_change_home;
+                        if (curY != tcP) { chk = true; rPos = tool_change_station; }
+                        _currentGripper = "Crate_gripper"; break;
+                    case 5: // crates on slider
+                        pick.Add(_pickCrate3); pick.Add(_pickCrate2); pick.Add(_pickCrate1);
+                        place.Add(_placeCrates); place.Add(_placeCrates); place.Add(_placeCrates);
+                        nOps = 3; opT = "pp"; hPose = crate_home;
+                        if (curY != lcP) { chk = true; rPos = load_crates_station; }
+                        _action5Done = true; break;
+                    case 6: // remove crate 3
+                        pick.Add(_pickCrate3); place.Add(_crateLowOutfeed);
+                        nOps = 1; opT = "pp"; hPose = crate_home;
+                        if (curY != ulP) { chk = true; rPos = unload_crates_station; }
+                        _action6Done = true; break;
+                    case 7: // put boxes B batch 1 in crate 2
+                        pick.Add(_pickBoxB1); pick.Add(_pickBoxB2); place.Add(_placeBox1Crate2); place.Add(_placeBox2Crate2);
+                        nOps = 2; opT = "pp"; hPose = pp_home; optCfg = true;
+                        if (curY != bicP) { chk = true; rPos = pp_box_in_crate_station; }
+                        //_action7Done = true; 
+                        _boxesInCrate2TypeB += 2;
                         break;
-
-                    case 5:
-                        pickFrames.Add(_pickCrate3); pickFrames.Add(_pickCrate2); pickFrames.Add(_pickCrate1);
-                        placeFrames.Add(_placeCrates); placeFrames.Add(_placeCrates); placeFrames.Add(_placeCrates);
-                        n_sequential_op = 3; op_type = "pp"; home_pose = crate_home;
-                        optimize_config = false;
-                        if (currentY != load_crat_stat) { check_pos = true; rob_pos = load_crates_station; }
-                        _actionFiveDone = true;
+                    case 8: // remove crate 2
+                        pick.Add(_pickCrate2); place.Add(_crate2Outfeed);
+                        nOps = 1; opT = "pp"; hPose = crate_home;
+                        if (curY != ulP) { chk = true; rPos = unload_crates_station; }
+                        _action8Done = true; break;
+                    case 9: // fill boxes A batch 2
+                        pick.Add(_pickA3); pick.Add(_pickA4); place.Add(_placeA3); place.Add(_placeA4);
+                        nOps = 2; opT = "pp"; hPose = pp_home;
+                        if (curY != ppP) { chk = true; rPos = pp_station; }
                         break;
-
-                    case 6:
-                        pickFrames.Add(_pickCrate3); placeFrames.Add(_crateLowOutfeed);
-                        n_sequential_op = 1; op_type = "pp"; home_pose = crate_home;
-                        optimize_config = false;
-                        if (currentY != unload_crat_stat) { check_pos = true; rob_pos = unload_crates_station; }
-                        _actionSixDone = true;
+                    case 10: // put boxes A batch 2 in crate 3
+                        pick.Add(_pickBoxA3); pick.Add(_pickBoxA4); place.Add(_placeBox3Crate3); place.Add(_placeBox4Crate3);
+                        nOps = 2; opT = "pp"; hPose = pp_home; optCfg = true;
+                        if (curY != bicP) { chk = true; rPos = pp_box_in_crate_station; }
+                        _action10Done = true; _boxesInCrate3TypeA += 2;
                         break;
-
-                    case 7:
-                        pickFrames.Add(_pickBoxB1); pickFrames.Add(_pickBoxB2);
-                        placeFrames.Add(_placeBox1Crate2); placeFrames.Add(_placeBox2Crate2);
-                        n_sequential_op = 2; op_type = "pp"; home_pose = pp_home;
-                        optimize_config = true;
-                        if (currentY != pp_pose_rob_bic) { check_pos = true; rob_pos = pp_box_in_crate_station; }
-                        _actionSevenDone = true;
-                        _boxesInCrate2TypeB += n_sequential_op;
+                    case 11: // fill boxes B batch 2
+                        pick.Add(_pickB3); pick.Add(_pickB4); place.Add(_placeB3); place.Add(_placeB4);
+                        nOps = 2; opT = "pp"; hPose = pp_home;
+                        if (curY != ppP) { chk = true; rPos = pp_station; }
                         break;
-
-                    case 8:
-                        pickFrames.Add(_pickCrate2); placeFrames.Add(_crate2Outfeed);
-                        n_sequential_op = 1; op_type = "pp"; home_pose = crate_home;
-                        optimize_config = false;
-                        if (currentY != unload_crat2_stat) { check_pos = true; rob_pos = unload_crate2_station; }
-                        _actionEightDone = true;
+                    case 12: // put boxes B batch 2 in crate 2
+                        pick.Add(_pickBoxB3); pick.Add(_pickBoxB4); place.Add(_placeBox3Crate2); place.Add(_placeBox4Crate2);
+                        nOps = 2; opT = "pp"; hPose = pp_home; optCfg = true;
+                        if (curY != bicP) { chk = true; rPos = pp_box_in_crate_station; }
+                        _action12Done = true; _boxesInCrate2TypeB += 2;
                         break;
-
                     default:
-                        UpdateDebug(0, -5.0);
-                        return new StepResult(BuildObservation(), -10.0, true, false);
+                        return new StepResult(BuildObservation(), -10, true, false);
                 }
 
-                double opTime = 0.0;
-                if (op_type == "pp")
-                {
-                    for (int i = 0; i < pickFrames.Count; i++)
+                double opTime = 0;
+                if (opT == "pp")
+                    for (int i = 0; i < pick.Count; i++)
                     {
-                        opTime = ExecutePickAndPlace(
-                            pickFrames[i], placeFrames[i], opName + "_" + i,
-                            check_pos, rob_pos, base_opName + "_" + i,
-                            actionId, i, home_pose, home_opName + "_" + i, optimize_config);
+                        opTime = ExecutePickAndPlace(pick[i], place[i], opN + "_" + i, chk, rPos, baseN + "_" + i, actionId, i, hPose, homeN + "_" + i, optCfg);
                         _totalRobotTime += opTime;
                     }
-                }
-                else if (op_type == "tc")
+                else if (opT == "tc")
                 {
-                    opTime = ExecuteWait(opName, check_pos, rob_pos, base_opName,
-                        gripper_to_mount, gripper_to_unmount, home_pose, home_opName);
+                    opTime = ExecuteWait(opN, chk, rPos, baseN, gMount, gUnmount, hPose, homeN);
                     _totalRobotTime += opTime;
                 }
 
-                // After the execution loop
-                if (actionId == 0) _actionZeroDone = true;
-                if (actionId == 1) _actionOneDone = true;
+                // Set done flags AFTER execution
+                if (actionId == 0) _action0Done = true;
+                if (actionId == 1) _action1Done = true;
+                if (actionId == 2) _action2Done = true;
+                if (actionId == 7) _action7Done = true;
+                if (actionId == 9) _action9Done = true;
+                if (actionId == 11) _action11Done = true;
 
-                // Reward computation
-                reward = -opTime * 0.01;
+                double reward = -opTime * 0.01;
+                bool terminated = false;
 
                 if (actionId == 8)
                 {
-                    reward += 10.0;
-                    terminated = true;
-                    System.Diagnostics.Trace.WriteLine("[RL] Goal reached! Crate 2 removed.");
-                    TxMessageBox.Show("Episode correctly terminated", "Termination",
-                                      MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                    reward += 10; terminated = true;
+                    TxMessageBox.Show("Episode complete!", "Done", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
                 }
+                if (actionId == 6) reward += 5;
 
-                if (actionId == 6)
-                {
-                    reward += 5.0;
-                    System.Diagnostics.Trace.WriteLine("[RL] Crate 3 removed. Halfway done.");
-                }
+                if (_stepCount >= MAX_STEPS) return new StepResult(BuildObservation(), reward, terminated, true);
 
-                System.Diagnostics.Trace.WriteLine(
-                    $"[RL] Op took {opTime:F2}s. Total: {_totalRobotTime:F2}s. Reward: {reward:F3}");
+                UpdateDebug(actionId, reward);
+                return new StepResult(BuildObservation(), reward, terminated, false);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Trace.WriteLine($"[RL] Simulation error: {ex.Message}");
-                UpdateDebug(0, -5.0);
-                return new StepResult(BuildObservation(), -10.0, true, false);
+                System.Diagnostics.Trace.WriteLine($"[RL] Error: {ex.Message}");
+                return new StepResult(BuildObservation(), -10, true, false);
             }
-
-            if (_stepCount >= MAX_STEPS) truncated = true;
-
-            UpdateDebug(actionId, reward);
-            return new StepResult(BuildObservation(), reward, terminated, truncated);
         }
 
         // =====================================================
-        //  EXECUTE A PICK AND PLACE OPERATION
+        //  EXECUTE PICK AND PLACE
         // =====================================================
-
-        private double ExecutePickAndPlace(
-            string pickFrame, string placeFrame, string opName,
-            bool check_pos, string rob_pos, string base_opName,
-            int actionId, int it, string home_pose, string home_opName,
-            bool optimize_config)
+        private double ExecutePickAndPlace(string pickF, string placeF, string opN, bool chk, string rPos, string baseN, int aId, int it, string hPose, string homeN, bool optCfg)
         {
-            TxDeviceOperation home_op = _robotResource.HomeRobot("GoFa12", home_opName, home_pose, 0.0);
-            _created_deviceOps.Add(home_op);
-            _lastSimTime = 0.0;
-            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-            TxApplication.ActiveDocument.CurrentOperation = home_op;
-            _player.Play();
+            TxDeviceOperation homeOp = _robotResource.HomeRobot("GoFa12", homeN, hPose, 0);
+            _created_deviceOps.Add(homeOp);
+            _lastSimTime = 0; _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+            TxApplication.ActiveDocument.CurrentOperation = homeOp; _player.Play();
             _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-            double home_pos_time = _player.CurrentTime;
+            double hTime = _player.CurrentTime;
 
-            double base_pos_time = 0.0;
-            if (check_pos)
+            double bTime = 0;
+            if (chk)
             {
-                TxDeviceOperation base_op = _robotResource.CreateDeviceOp("Line", base_opName, rob_pos, 0.0);
-                _created_deviceOps.Add(base_op);
-                _lastSimTime = 0.0;
-                _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-                TxApplication.ActiveDocument.CurrentOperation = base_op;
-                _player.Play();
+                var bOp = _robotResource.CreateDeviceOp("Line", baseN, rPos, 0); _created_deviceOps.Add(bOp);
+                _lastSimTime = 0; _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+                TxApplication.ActiveDocument.CurrentOperation = bOp; _player.Play();
                 _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-                base_pos_time = _player.CurrentTime;
+                bTime = _player.CurrentTime;
             }
 
-            TxContinuousRoboticOperation myop = _robotResource.PP_op(
-                "GoFa12", _currentGripper, pickFrame, placeFrame,
-                opName, OFFSET, home_pose, optimize_config);
+            var myop = _robotResource.PP_op("GoFa12", _currentGripper, pickF, placeF, opN, OFFSET, hPose, optCfg);
             _createdOps.Add(myop);
-
-            _lastSimTime = 0.0;
-            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-            TxApplication.ActiveDocument.CurrentOperation = myop;
-            _player.Play();
+            _lastSimTime = 0; _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+            TxApplication.ActiveDocument.CurrentOperation = myop; _player.Play();
             _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
 
-            if (actionId == 2)
-            {
-                _robotResource.AttachItem(small_boxes_A_1[it], "Crate_3");
-                _robotResource.AttachItem(cover_boxes_A_1[it], "Crate_3");
-                _robotResource.AttachItem(pieces_A_1[it], "Crate_3");
-            }
-            if (actionId == 7)
-            {
-                _robotResource.AttachItem(small_boxes_B_1[it], "Crate_2");
-                _robotResource.AttachItem(cover_boxes_B_1[it], "Crate_2");
-                _robotResource.AttachItem(pieces_B_1[it], "Crate_2");
-            }
-            if (actionId == 5)
-            {
-                int num_crate = NUM_CRATES - it;
-                _robotResource.PlaceResourceAccordingToFrame("Crate_" + num_crate, slider_frames[it]);
-                _available_places_on_slider[it] = 0;
-            }
-            if (actionId == 6)
-            {
-                _robotResource.PlaceResourceAccordingToFrame("Crate_2", slider_frames[0]);
-                _robotResource.PlaceResourceAccordingToFrame("Crate_1", slider_frames[1]);
-            }
-            if (actionId == 8)
-            {
-                _robotResource.PlaceResourceAccordingToFrame("Crate_1", slider_frames[0]);
-            }
+            // Attach items to crates
+            if (aId == 2) { _robotResource.AttachItem(small_boxes_A_1[it], "Crate_3"); _robotResource.AttachItem(cover_boxes_A_1[it], "Crate_3"); _robotResource.AttachItem(pieces_A_1[it], "Crate_3"); }
+            if (aId == 10) { _robotResource.AttachItem(small_boxes_A_2[it], "Crate_3"); _robotResource.AttachItem(cover_boxes_A_2[it], "Crate_3"); _robotResource.AttachItem(pieces_A_2[it], "Crate_3"); }
+            if (aId == 7) { _robotResource.AttachItem(small_boxes_B_1[it], "Crate_2"); _robotResource.AttachItem(cover_boxes_B_1[it], "Crate_2"); _robotResource.AttachItem(pieces_B_1[it], "Crate_2"); }
+            if (aId == 12) { _robotResource.AttachItem(small_boxes_B_2[it], "Crate_2"); _robotResource.AttachItem(cover_boxes_B_2[it], "Crate_2"); _robotResource.AttachItem(pieces_B_2[it], "Crate_2"); }
+            if (aId == 5) { _robotResource.PlaceResourceAccordingToFrame("Crate_" + (NUM_CRATES - it), slider_frames[it]); _available_places_on_slider[it] = 0; }
+            if (aId == 6) { _robotResource.PlaceResourceAccordingToFrame("Crate_2", slider_frames[0]); _robotResource.PlaceResourceAccordingToFrame("Crate_1", slider_frames[1]); }
+            if (aId == 8) { _robotResource.PlaceResourceAccordingToFrame("Crate_1", slider_frames[0]); }
 
-            double timeTaken = _player.CurrentTime;
-            return timeTaken + base_pos_time + home_pos_time;
+            return _player.CurrentTime + bTime + hTime;
         }
 
         // =====================================================
-        //  EXECUTE A WAIT OPERATION
+        //  EXECUTE WAIT (TOOL CHANGE)
         // =====================================================
-
-        private double ExecuteWait(
-            string opName, bool check_pos, string rob_pos, string base_opName,
-            string gripper_to_mount, string gripper_to_unmount,
-            string home_pose, string home_opName)
+        private double ExecuteWait(string opN, bool chk, string rPos, string baseN, string gM, string gU, string hPose, string homeN)
         {
-            TxDeviceOperation home_op = _robotResource.HomeRobot("GoFa12", home_opName, home_pose, 0.0);
-            _created_deviceOps.Add(home_op);
-            _lastSimTime = 0.0;
-            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-            TxApplication.ActiveDocument.CurrentOperation = home_op;
-            _player.Play();
+            TxDeviceOperation homeOp = _robotResource.HomeRobot("GoFa12", homeN, hPose, 0); _created_deviceOps.Add(homeOp);
+            _lastSimTime = 0; _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+            TxApplication.ActiveDocument.CurrentOperation = homeOp; _player.Play();
             _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-            double home_pos_time = _player.CurrentTime;
+            double hTime = _player.CurrentTime;
 
-            double base_pos_time = 0.0;
-            if (check_pos)
+            double bTime = 0;
+            if (chk)
             {
-                TxDeviceOperation base_op = _robotResource.CreateDeviceOp("Line", base_opName, rob_pos, 0.0);
-                _created_deviceOps.Add(base_op);
-                _lastSimTime = 0.0;
-                _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-                TxApplication.ActiveDocument.CurrentOperation = base_op;
-                _player.Play();
+                var bOp = _robotResource.CreateDeviceOp("Line", baseN, rPos, 0); _created_deviceOps.Add(bOp);
+                _lastSimTime = 0; _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+                TxApplication.ActiveDocument.CurrentOperation = bOp; _player.Play();
                 _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-                base_pos_time = _player.CurrentTime;
+                bTime = _player.CurrentTime;
             }
-
-            _robotResource.UnMountToolGripper("GoFa12", gripper_to_unmount, "tool_station_" + gripper_to_unmount);
-            _robotResource.MountToolGripper("GoFa12", gripper_to_mount, "tool_holder_offset",
-                "BASEFRAME_" + gripper_to_mount, "TCPF_" + gripper_to_mount);
-            TxDeviceOperation myop = _robotResource.CreateDeviceOp("Line", "Wait_" + base_opName, rob_pos, tool_change_duration);
-            _created_deviceOps.Add(myop);
-
-            _lastSimTime = 0.0;
-            _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-            TxApplication.ActiveDocument.CurrentOperation = myop;
-            _player.Play();
+            _robotResource.UnMountToolGripper("GoFa12", gU, "tool_station_" + gU);
+            _robotResource.MountToolGripper("GoFa12", gM, "tool_holder_offset", "BASEFRAME_" + gM, "TCPF_" + gM);
+            var wOp = _robotResource.CreateDeviceOp("Line", "Wait_" + baseN, rPos, tool_change_duration); _created_deviceOps.Add(wOp);
+            _lastSimTime = 0; _player.TimeIntervalReached += new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
+            TxApplication.ActiveDocument.CurrentOperation = wOp; _player.Play();
             _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
-
-            double timeTaken = _player.CurrentTime;
-            return timeTaken + base_pos_time + home_pos_time;
+            return _player.CurrentTime + bTime + hTime;
         }
 
         // =====================================================
         //  OBSERVATION + ACTION MASK
         // =====================================================
-
         private ObservationPacket BuildObservation()
         {
-            double railPos = _robot.AbsoluteLocation.Translation.Y / MAX_RAIL_LENGTH;
-            railPos = Math.Max(0.0, Math.Min(1.0, railPos));
-            double gripperSmart = (_currentGripper == "Smart_gripper") ? 1.0 : 0.0;
-            double gripperCrate = (_currentGripper == "Crate_gripper") ? 1.0 : 0.0;
-            double gripperNone = 1.0 - gripperSmart - gripperCrate;
+            double rp = Math.Max(0, Math.Min(1, _robot.AbsoluteLocation.Translation.Y / MAX_RAIL_LENGTH));
+            double gS = (_currentGripper == "Smart_gripper") ? 1 : 0, gC = (_currentGripper == "Crate_gripper") ? 1 : 0, gN = 1 - gS - gC;
+            int cp = _available_places_on_slider.FindAll(x => x == 0).Count;
+            double et = Math.Min(_totalRobotTime / MAX_EXPECTED_TIME, 1);
 
-            double typeADone = _actionZeroDone ? 1.0 : 0.0;
-            double typeBDone = _actionOneDone ? 1.0 : 0.0;
-            double boxesReady = (_actionZeroDone && _actionOneDone) ? 1.0 : 0.0;
-            int cratesPlaced = _available_places_on_slider.FindAll(x => x == 0).Count;
-            double cratesOnSlider = (double)cratesPlaced / NUM_CRATES;
-            double boxInCrate = _actionTwoDone ? 1.0 : 0.0;
-            double elapsedNorm = Math.Min(_totalRobotTime / MAX_EXPECTED_TIME, 1.0);
-
-            double boxesInCrate3A = (double)_boxesInCrate3TypeA / MAX_BOXES_PER_CRATE;
-            double boxesInCrate2B = (double)_boxesInCrate2TypeB / MAX_BOXES_PER_CRATE;
-            double crate3Removed = _actionSixDone ? 1.0 : 0.0;
-            double boxBInCrate2 = _actionSevenDone ? 1.0 : 0.0;
-
-            // Human flags
-            double piecesAReady = _piecesAAvailable ? 1.0 : 0.0;
-            double piecesBReady = _piecesBAvailable ? 1.0 : 0.0;
-            double cratesReady = _cratesAvailable ? 1.0 : 0.0;
-            double boxesACreated = _smallBoxesACreated ? 1.0 : 0.0;
-            double boxesBCreated = _smallBoxesBCreated ? 1.0 : 0.0;
-            double boxesAClosed = _smallBoxesAClosed ? 1.0 : 0.0;
-            double boxesBClosed = _smallBoxesBClosed ? 1.0 : 0.0;
-
-            // State vector: 21 elements
-            var state = new List<double>
-            {
-                railPos,          // 0
-                gripperSmart,     // 1
-                gripperCrate,     // 2
-                gripperNone,      // 3
-                typeADone,        // 4
-                typeBDone,        // 5
-                boxesReady,       // 6
-                cratesOnSlider,   // 7
-                boxInCrate,       // 8
-                elapsedNorm,      // 9
-                boxesInCrate3A,   // 10
-                boxesInCrate2B,   // 11
-                crate3Removed,    // 12
-                boxBInCrate2,     // 13
-                piecesAReady,     // 14
-                piecesBReady,     // 15
-                cratesReady,      // 16
-                boxesACreated,    // 17  NEW
-                boxesBCreated,    // 18  NEW
-                boxesAClosed,     // 19  NEW
-                boxesBClosed      // 20  NEW
+            // 25-element state vector
+            var state = new List<double> {
+                rp, gS, gC, gN,                                        // 0-3: robot
+                _action0Done?1:0, _action1Done?1:0,                     // 4-5: batch 1 filled
+                _action9Done?1:0, _action11Done?1:0,                    // 6-7: batch 2 filled
+                _action2Done?1:0, _action7Done?1:0,                     // 8-9: batch 1 in crate
+                _action10Done?1:0, _action12Done?1:0,                   // 10-11: batch 2 in crate
+                (double)cp/NUM_CRATES,                                  // 12: crates on slider
+                _action6Done?1:0, _action8Done?1:0,                     // 13-14: crates removed
+                (double)_boxesInCrate3TypeA/MAX_BOXES_PER_CRATE,        // 15: boxes in crate 3
+                (double)_boxesInCrate2TypeB/MAX_BOXES_PER_CRATE,        // 16: boxes in crate 2
+                et,                                                      // 17: elapsed time
+                _piecesAAvailable?1:0, _piecesBAvailable?1:0,           // 18-19: pallets
+                _cratesAvailable?1:0,                                    // 20: crates on line
+                _smallBoxesA1Created?1:0, _smallBoxesB1Created?1:0,     // 21-22: batch 1 boxes created
+                _smallBoxesA1Closed?1:0, _smallBoxesB1Closed?1:0,       // 23-24: batch 1 boxes closed
+                _smallBoxesA2Created?1:0, _smallBoxesB2Created?1:0,     // 25-26: batch 2 boxes created
+                _smallBoxesA2Closed?1:0, _smallBoxesB2Closed?1:0        // 27-28: batch 2 boxes closed
             };
 
-            bool hasSmartGripper = _currentGripper == "Smart_gripper";
-            bool hasCrateGripper = _currentGripper == "Crate_gripper";
+            bool S = _currentGripper == "Smart_gripper", C = _currentGripper == "Crate_gripper";
 
-            // Action 2: needs boxes A closed
-            bool action2Feasible = _actionZeroDone && _actionOneDone && _actionFiveDone &&
-                                   hasSmartGripper && !_actionTwoDone && _smallBoxesAClosed;
-
-            bool action6Feasible = hasCrateGripper && _actionTwoDone &&
-                       (_boxesInCrate3TypeA >= MAX_BOXES_PER_CRATE) && !_actionSixDone;
-
-            // Action 7: needs boxes B closed
-            bool action7Feasible = hasSmartGripper && _actionFiveDone &&
-                                   _actionOneDone && !_actionSevenDone && _smallBoxesBClosed;
-
-            bool action8Feasible = hasCrateGripper && _actionSixDone &&
-                                   _actionSevenDone && !_actionEightDone;
-
-            var actionMask = new List<int>
-            {
-                (!_actionZeroDone && hasSmartGripper && _piecesAAvailable && _smallBoxesACreated) ? 1 : 0,  // 0
-                (!_actionOneDone && hasSmartGripper && _piecesBAvailable && _smallBoxesBCreated) ? 1 : 0,   // 1
-                action2Feasible ? 1 : 0,                                                                     // 2
-                !hasSmartGripper ? 1 : 0,                                                                    // 3
-                !hasCrateGripper ? 1 : 0,                                                                    // 4
-                (!_actionFiveDone && hasCrateGripper && _cratesAvailable) ? 1 : 0,                           // 5
-                action6Feasible ? 1 : 0,                                                                     // 6
-                action7Feasible ? 1 : 0,                                                                     // 7
-                action8Feasible ? 1 : 0                                                                      // 8
+            var mask = new List<int> {
+                (!_action0Done && S && _piecesAAvailable && _smallBoxesA1Created)?1:0,                          // 0
+                (!_action1Done && S && _piecesBAvailable && _smallBoxesB1Created)?1:0,                          // 1
+                (_action0Done && _action5Done && S && !_action2Done && _smallBoxesA1Closed)?1:0,                // 2
+                (!S)?1:0,                                                                                       // 3
+                (!C)?1:0,                                                                                       // 4
+                (!_action5Done && C && _cratesAvailable)?1:0,                                                   // 5
+                (C && _action2Done && _action10Done && !_action6Done && _boxesInCrate3TypeA>=MAX_BOXES_PER_CRATE)?1:0, // 6
+                (_action1Done && _action5Done && S && !_action7Done && _smallBoxesB1Closed)?1:0,                // 7
+                (C && _action6Done && _action7Done && _action12Done && !_action8Done && _boxesInCrate2TypeB>=MAX_BOXES_PER_CRATE)?1:0, // 8
+                (!_action9Done && S && _piecesAAvailable && _smallBoxesA2Created)?1:0,                          // 9
+                (_action9Done && _action5Done && _action2Done && S && !_action10Done && _smallBoxesA2Closed)?1:0, // 10
+                (!_action11Done && S && _piecesBAvailable && _smallBoxesB2Created)?1:0,                         // 11
+                (_action11Done && _action5Done && _action7Done && S && !_action12Done && _smallBoxesB2Closed)?1:0 // 12
             };
 
-            return new ObservationPacket
-            {
-                State = state,
-                ActionMask = actionMask
-            };
+            return new ObservationPacket { State = state, ActionMask = mask };
         }
 
-        // =====================================================
-        //  DEBUG
-        // =====================================================
-
-        private void UpdateDebug(int actionId, double reward)
+        private void UpdateDebug(int a, double r)
         {
-            _debugPanel.UpdateState(
-                _episodeId, _stepCount, actionId, reward,
-                _currentGripper, _actionZeroDone, _actionOneDone, _actionFiveDone,
-                _totalRobotTime,
-                _available_places_on_slider[0],
-                _available_places_on_slider[1],
-                _available_places_on_slider[2]
-            );
+            _debugPanel.UpdateState(_episodeId, _stepCount, a, r, _currentGripper, _action0Done, _action1Done, _action5Done,
+                _totalRobotTime, _available_places_on_slider[0], _available_places_on_slider[1], _available_places_on_slider[2]);
         }
-
-        // =====================================================
-        //  CLEANUP
-        // =====================================================
 
         public void Dispose()
         {
-            foreach (var op in _createdOps)
-            { try { op?.Delete(); } catch { } }
+            foreach (var op in _createdOps) { try { op?.Delete(); } catch { } }
             _createdOps.Clear();
-
-            foreach (var op in _created_deviceOps)
-            { try { op?.Delete(); } catch { } }
+            foreach (var op in _created_deviceOps) { try { op?.Delete(); } catch { } }
             _created_deviceOps.Clear();
-
-            _snapshot.Apply(_snapParams);
-            TxApplication.RefreshDisplay();
-            _player?.ResetToDefaultSetting();
-            _player?.AskUserForReset(false);
-            _player?.DoOnlyUnscheduledReset(true);
-            _communicator?.Dispose();
+            _snapshot.Apply(_snapParams); TxApplication.RefreshDisplay();
+            _player?.ResetToDefaultSetting(); _communicator?.Dispose();
         }
     }
 }

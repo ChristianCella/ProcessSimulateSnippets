@@ -11,15 +11,19 @@ import numpy as np
 from simple_robot_env import SimpleRobotEnv
 
 ACTION_NAMES = {
-    0: "Pick & Place Type A",
-    1: "Pick & Place Type B",
-    2: "Insert Type A boxes into Crate 3",
-    3: "Change to Smart gripper",
-    4: "Change to Crate gripper",
-    5: "Put crates on the slider",
-    6: "Remove Crate 3 from slider",
-    7: "Insert Type B boxes into Crate 2",  # NEW
-    8: "Remove Crate 2 from slider"          # NEW
+    0: "Fill boxes A (batch 1)",
+    1: "Fill boxes B (batch 1)",
+    2: "Put boxes A in crate 3 (batch 1)",
+    3: "Mount Smart gripper",
+    4: "Mount Crate gripper",
+    5: "Put crates on slider",
+    6: "Remove crate 3",
+    7: "Put boxes B in crate 2 (batch 1)",
+    8: "Remove crate 2",
+    9: "Fill boxes A (batch 2)",
+    10: "Put boxes A in crate 3 (batch 2)",
+    11: "Fill boxes B (batch 2)",
+    12: "Put boxes B in crate 2 (batch 2)",
 }
 
 NUM_EPISODES = 2
