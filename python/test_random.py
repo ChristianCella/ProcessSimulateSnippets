@@ -22,7 +22,7 @@ ACTION_NAMES = {
     8: "Remove Crate 2 from slider"          # NEW
 }
 
-NUM_EPISODES = 3
+NUM_EPISODES = 2
 
 env = SimpleRobotEnv()
 

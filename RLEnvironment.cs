@@ -12,17 +12,10 @@ namespace ProcessSimulateSnippets
     public class HumanWaypointAction
     {
         public int WaypointIndex { get; set; }
-
-        // Resources to relocate
         public List<string> RelocateResources { get; set; }
         public List<string> RelocateFrames { get; set; }
-
-        // Resources to unblank (make visible)
         public List<string> UnblankResources { get; set; }
-
-        // Resources to blank (make invisible)
         public List<string> BlankResources { get; set; }
-
         public string UnlocksFlag { get; set; }
 
         public HumanWaypointAction()
@@ -67,10 +60,14 @@ namespace ProcessSimulateSnippets
         private TxTransformation _humanSegmentGoal;
         private double _lastSimTime = 0.0;
 
-        // Human flags
+        // Human flags — set by human tasks, read by robot feasibility/mask
         private bool _piecesAAvailable = false;
         private bool _piecesBAvailable = false;
         private bool _cratesAvailable = false;
+        private bool _smallBoxesACreated = false;   // NEW: small boxes A placed on line
+        private bool _smallBoxesBCreated = false;   // NEW: small boxes B placed on line
+        private bool _smallBoxesAClosed = false;    // NEW: small boxes A closed (covers on)
+        private bool _smallBoxesBClosed = false;    // NEW: small boxes B closed (covers on)
 
         // Human task management
         private HumanTask _currentHumanTask;
@@ -82,6 +79,10 @@ namespace ProcessSimulateSnippets
         private bool _humanTaskPiecesADone = false;
         private bool _humanTaskPiecesBDone = false;
         private bool _humanTaskCratesDone = false;
+        private bool _humanTaskCreateBoxesADone = false;  // NEW
+        private bool _humanTaskCreateBoxesBDone = false;  // NEW
+        private bool _humanTaskCloseBoxesADone = false;   // NEW
+        private bool _humanTaskCloseBoxesBDone = false;   // NEW
 
         // Human home frame
         private readonly string _humanHomeFrame = "human_home_frame";
@@ -89,14 +90,18 @@ namespace ProcessSimulateSnippets
         // Pause duration after waypoint actions
         private const double WAYPOINT_PAUSE = 5.0;
 
-        // Human task: deliver pieces A
+        // =====================================================
+        //  HUMAN TASK DEFINITIONS
+        // =====================================================
+
+        // Task: deliver pieces A
         private readonly HumanTask _humanTaskPiecesA = new HumanTask
         {
             Name = "Deliver Pieces A",
             Waypoints = new List<string>
             {
                 "human_home_frame",
-                "human_leave_pallet_A_1",
+                "human_leave_pallet_A_1", 
                 "human_home_frame"
             },
             Actions = new List<HumanWaypointAction>
@@ -104,8 +109,8 @@ namespace ProcessSimulateSnippets
                 new HumanWaypointAction
                 {
                     WaypointIndex = 1,
-                    RelocateResources = new List<string> { "Pallet_pieces_A" },
-                    RelocateFrames = new List<string> { "fixtures_pallet_A_frame" },
+                    RelocateResources = new List<string> { "Pallet_pieces_A" },  
+                    RelocateFrames = new List<string> { "fixtures_pallet_A_frame" },  
                     UnblankResources = new List<string>(),
                     BlankResources = new List<string>(),
                     UnlocksFlag = "piecesAAvailable"
@@ -113,7 +118,7 @@ namespace ProcessSimulateSnippets
             }
         };
 
-        // Human task: deliver pieces B
+        // Task: deliver pieces B
         private readonly HumanTask _humanTaskPiecesB_def = new HumanTask
         {
             Name = "Deliver Pieces B",
@@ -128,7 +133,7 @@ namespace ProcessSimulateSnippets
                 new HumanWaypointAction
                 {
                     WaypointIndex = 1,
-                    RelocateResources = new List<string> { "Pallet_pieces_B" },
+                    RelocateResources = new List<string> { "Pallet_pieces_B" },  
                     RelocateFrames = new List<string> { "fixtures_pallet_B_frame" },
                     UnblankResources = new List<string>(),
                     BlankResources = new List<string>(),
@@ -137,7 +142,7 @@ namespace ProcessSimulateSnippets
             }
         };
 
-        // Human task: deliver crates
+        // Task: deliver crates
         private readonly HumanTask _humanTaskCrates = new HumanTask
         {
             Name = "Deliver Crates",
@@ -149,11 +154,11 @@ namespace ProcessSimulateSnippets
                 "human_leave_crates_3",
                 "human_leave_crates_4",
                 "human_leave_crates_5",
-                "human_leave_crates_5",
-                "human_leave_crates_4",
-                "human_leave_crates_3",
-                "human_leave_crates_2",
-                "human_leave_crates_1",
+                "human_leave_crates_6",
+                "human_leave_crates_7",
+                "human_leave_crates_8",
+                "human_leave_crates_9",
+                "human_leave_crates_10",
                 "human_home_frame"
             },
             Actions = new List<HumanWaypointAction>
@@ -170,7 +175,145 @@ namespace ProcessSimulateSnippets
             }
         };
 
-        // Human task: wait in place
+        // NEW Task: create small boxes A (unblank + relocate 2 boxes)
+        private readonly HumanTask _humanTaskCreateBoxesA = new HumanTask
+        {
+            Name = "Create Small Boxes A",
+            Waypoints = new List<string>
+            {
+                "human_home_frame",
+                "human_create_boxes",
+                "human_home_frame"
+            },
+            Actions = new List<HumanWaypointAction>
+            {
+                new HumanWaypointAction
+                {
+                    WaypointIndex = 1,
+                    RelocateResources = new List<string>
+                    {
+                        "Type_A_box_left_1", 
+                        "Type_A_box_right_1"  
+                    },
+                    RelocateFrames = new List<string>
+                    {
+                        "pallet_box_A_left", 
+                        "pallet_box_A_right" 
+                    },
+                    UnblankResources = new List<string>
+                    {
+                        "Type_A_box_left_1",
+                        "Type_A_box_right_1" 
+                    },
+                    BlankResources = new List<string>(),
+                    UnlocksFlag = "smallBoxesACreated"
+                }
+            }
+        };
+
+        // NEW Task: create small boxes B (unblank + relocate 2 boxes)
+        private readonly HumanTask _humanTaskCreateBoxesB = new HumanTask
+        {
+            Name = "Create Small Boxes B",
+            Waypoints = new List<string>
+            {
+                "human_home_frame",
+                "human_create_boxes", 
+                "human_home_frame"
+            },
+            Actions = new List<HumanWaypointAction>
+            {
+                new HumanWaypointAction
+                {
+                    WaypointIndex = 1,
+                    RelocateResources = new List<string>
+                    {
+                        "Type_B_box_left_1",
+                        "Type_B_box_right_1"
+                    },
+                    RelocateFrames = new List<string>
+                    {
+                        "pallet_box_B_left", 
+                        "pallet_box_B_right" 
+                    },
+                    UnblankResources = new List<string>
+                    {
+                        "Type_B_box_left_1",  
+                        "Type_B_box_right_1" 
+                    },
+                    BlankResources = new List<string>(),
+                    UnlocksFlag = "smallBoxesBCreated"
+                }
+            }
+        };
+
+        // NEW Task: close small boxes A (blank pieces inside, unblank covers)
+        // Can only happen after robot action 0 is done
+        private readonly HumanTask _humanTaskCloseBoxesA = new HumanTask
+        {
+            Name = "Close Small Boxes A",
+            Waypoints = new List<string>
+            {
+                "human_home_frame",
+                "human_close_boxes",
+                "human_home_frame"
+            },
+            Actions = new List<HumanWaypointAction>
+            {
+                new HumanWaypointAction
+                {
+                    WaypointIndex = 1,
+                    RelocateResources = new List<string>(),
+                    RelocateFrames = new List<string>(),
+                    BlankResources = new List<string>
+                    {
+                        "Piece_A_1",
+                        "Piece_A_2" 
+                    },
+                    UnblankResources = new List<string>
+                    {
+                        "Type_A_box_cover_left_1", 
+                        "Type_A_box_cover_right_1" 
+                    },
+                    UnlocksFlag = "smallBoxesAClosed"
+                }
+            }
+        };
+
+        // NEW Task: close small boxes B (blank pieces inside, unblank covers)
+        // Can only happen after robot action 1 is done
+        private readonly HumanTask _humanTaskCloseBoxesB = new HumanTask
+        {
+            Name = "Close Small Boxes B",
+            Waypoints = new List<string>
+            {
+                "human_home_frame",
+                "human_close_boxes",  
+                "human_home_frame"
+            },
+            Actions = new List<HumanWaypointAction>
+            {
+                new HumanWaypointAction
+                {
+                    WaypointIndex = 1,
+                    RelocateResources = new List<string>(),
+                    RelocateFrames = new List<string>(),
+                    BlankResources = new List<string>
+                    {
+                        "Piece_B_1",   
+                        "Piece_B_2"   
+                    },
+                    UnblankResources = new List<string>
+                    {
+                        "Type_B_box_cover_left_1",  
+                        "Type_B_box_cover_right_1" 
+                    },
+                    UnlocksFlag = "smallBoxesBClosed"
+                }
+            }
+        };
+
+        // Task: wait in place
         private readonly HumanTask _humanTaskWait = new HumanTask
         {
             Name = "Wait",
@@ -204,9 +347,11 @@ namespace ProcessSimulateSnippets
         private const string crate_home = "Crate_home";
         private const string tool_change_home = "Tool_change_home";
 
-        // Small boxes
+        // Small boxes and covers
         private readonly List<string> small_boxes_A_1 = new List<string> { "Type_A_box_left_1", "Type_A_box_right_1" };
+        private readonly List<string> cover_boxes_A_1 = new List<string> { "Type_A_box_cover_left_1", "Type_A_box_cover_right_1" };
         private readonly List<string> small_boxes_B_1 = new List<string> { "Type_B_box_left_1", "Type_B_box_right_1" };
+        private readonly List<string> cover_boxes_B_1 = new List<string> { "Type_B_box_cover_left_1", "Type_B_box_cover_right_1" };
 
         // Pieces names
         private readonly List<string> pieces_A_1 = new List<string> { "Piece_A_1", "Piece_A_2" };
@@ -357,13 +502,24 @@ namespace ProcessSimulateSnippets
             _boxesInCrate3TypeA = 0;
             _boxesInCrate2TypeB = 0;
 
-            // Reset human state
+            // Reset all human flags
             _piecesAAvailable = false;
             _piecesBAvailable = false;
             _cratesAvailable = false;
+            _smallBoxesACreated = false;
+            _smallBoxesBCreated = false;
+            _smallBoxesAClosed = false;
+            _smallBoxesBClosed = false;
+
+            // Reset human task tracking
             _humanTaskPiecesADone = false;
             _humanTaskPiecesBDone = false;
             _humanTaskCratesDone = false;
+            _humanTaskCreateBoxesADone = false;
+            _humanTaskCreateBoxesBDone = false;
+            _humanTaskCloseBoxesADone = false;
+            _humanTaskCloseBoxesBDone = false;
+
             _humanBusy = false;
             _humanWaiting = false;
             _humanWaitRemaining = 0.0;
@@ -376,7 +532,6 @@ namespace ProcessSimulateSnippets
             TxFrame homeFrame = homeObj[0] as TxFrame;
             _humanProxy.AbsoluteLocation = new TxTransformation(homeFrame.AbsoluteLocation);
 
-            // Pick first human task randomly
             PickNextHumanTask();
 
             _player = TxApplication.ActiveDocument.SimulationPlayer;
@@ -404,12 +559,27 @@ namespace ProcessSimulateSnippets
         {
             List<HumanTask> feasibleTasks = new List<HumanTask>();
 
+            // Delivery tasks (no preconditions beyond one-shot)
             if (!_humanTaskPiecesADone)
                 feasibleTasks.Add(_humanTaskPiecesA);
             if (!_humanTaskPiecesBDone)
                 feasibleTasks.Add(_humanTaskPiecesB_def);
             if (!_humanTaskCratesDone)
                 feasibleTasks.Add(_humanTaskCrates);
+
+            // Create boxes tasks (no preconditions beyond one-shot)
+            if (!_humanTaskCreateBoxesADone)
+                feasibleTasks.Add(_humanTaskCreateBoxesA);
+            if (!_humanTaskCreateBoxesBDone)
+                feasibleTasks.Add(_humanTaskCreateBoxesB);
+
+            // Close boxes A: requires robot action 0 done (pieces A placed in boxes)
+            if (!_humanTaskCloseBoxesADone && _actionZeroDone)
+                feasibleTasks.Add(_humanTaskCloseBoxesA);
+
+            // Close boxes B: requires robot action 1 done (pieces B placed in boxes)
+            if (!_humanTaskCloseBoxesBDone && _actionOneDone)
+                feasibleTasks.Add(_humanTaskCloseBoxesB);
 
             // Wait is always feasible
             feasibleTasks.Add(_humanTaskWait);
@@ -455,12 +625,13 @@ namespace ProcessSimulateSnippets
                 _humanWaiting = false;
 
                 // Mark one-shot tasks as done
-                if (_currentHumanTask == _humanTaskPiecesA)
-                    _humanTaskPiecesADone = true;
-                if (_currentHumanTask == _humanTaskPiecesB_def)
-                    _humanTaskPiecesBDone = true;
-                if (_currentHumanTask == _humanTaskCrates)
-                    _humanTaskCratesDone = true;
+                if (_currentHumanTask == _humanTaskPiecesA) _humanTaskPiecesADone = true;
+                if (_currentHumanTask == _humanTaskPiecesB_def) _humanTaskPiecesBDone = true;
+                if (_currentHumanTask == _humanTaskCrates) _humanTaskCratesDone = true;
+                if (_currentHumanTask == _humanTaskCreateBoxesA) _humanTaskCreateBoxesADone = true;
+                if (_currentHumanTask == _humanTaskCreateBoxesB) _humanTaskCreateBoxesBDone = true;
+                if (_currentHumanTask == _humanTaskCloseBoxesA) _humanTaskCloseBoxesADone = true;
+                if (_currentHumanTask == _humanTaskCloseBoxesB) _humanTaskCloseBoxesBDone = true;
 
                 System.Diagnostics.Trace.WriteLine($"[RL] Human completed task: {_currentHumanTask.Name}");
                 PickNextHumanTask();
@@ -488,7 +659,6 @@ namespace ProcessSimulateSnippets
         {
             if (!_humanBusy) return;
 
-            // Handle any pause (wait task OR mid-task pause after waypoint action)
             if (_humanWaiting)
             {
                 _humanWaitRemaining -= deltaTime;
@@ -503,14 +673,12 @@ namespace ProcessSimulateSnippets
                     }
                     else
                     {
-                        // Mid-task pause ended, continue to next segment
                         SetNextHumanSegment();
                     }
                 }
                 return;
             }
 
-            // Handle movement
             if (_humanPathLength < 1.0)
             {
                 PerformHumanActionAtWaypoint();
@@ -525,7 +693,6 @@ namespace ProcessSimulateSnippets
             if (_humanProgress >= 1.0)
             {
                 _humanProxy.AbsoluteLocation = new TxTransformation(_humanSegmentGoal);
-
                 PerformHumanActionAtWaypoint();
                 if (!_humanWaiting)
                     SetNextHumanSegment();
@@ -538,9 +705,7 @@ namespace ProcessSimulateSnippets
                 double y = start.Y + (goal.Y - start.Y) * _humanProgress;
                 double z = _humanProxy.AbsoluteLocation.Translation.Z;
 
-                // Start from the goal's full transformation (includes rotation)
                 TxTransformation newPos = new TxTransformation(_humanSegmentGoal);
-                // Override only the translation
                 newPos.Translation = new TxVector(x, y, z);
                 _humanProxy.AbsoluteLocation = newPos;
             }
@@ -556,7 +721,6 @@ namespace ProcessSimulateSnippets
             {
                 if (action.WaypointIndex == _humanWaypointIndex)
                 {
-                    // Relocate resources
                     for (int i = 0; i < action.RelocateResources.Count; i++)
                     {
                         _robotResource.PlaceResourceAccordingToFrame(
@@ -565,21 +729,18 @@ namespace ProcessSimulateSnippets
                             $"[RL] Human relocated '{action.RelocateResources[i]}' to '{action.RelocateFrames[i]}'");
                     }
 
-                    // Unblank resources (make visible)
                     foreach (string res in action.UnblankResources)
                     {
-                        _robotResource.ChangeVisibility(res, true);
+                        _robotResource.ChangeVisibility(res, false);
                         System.Diagnostics.Trace.WriteLine($"[RL] Human unblanked '{res}'");
                     }
 
-                    // Blank resources (make invisible)
                     foreach (string res in action.BlankResources)
                     {
-                        _robotResource.ChangeVisibility(res, false);
+                        _robotResource.ChangeVisibility(res, true);
                         System.Diagnostics.Trace.WriteLine($"[RL] Human blanked '{res}'");
                     }
 
-                    // Set flag
                     if (!string.IsNullOrEmpty(action.UnlocksFlag))
                         SetHumanFlag(action.UnlocksFlag, true);
 
@@ -587,7 +748,6 @@ namespace ProcessSimulateSnippets
                 }
             }
 
-            // Pause after performing any action at this waypoint
             if (actionPerformed)
             {
                 _humanWaiting = true;
@@ -600,15 +760,13 @@ namespace ProcessSimulateSnippets
         {
             switch (flagName)
             {
-                case "piecesAAvailable":
-                    _piecesAAvailable = value;
-                    break;
-                case "piecesBAvailable":
-                    _piecesBAvailable = value;
-                    break;
-                case "cratesAvailable":
-                    _cratesAvailable = value;
-                    break;
+                case "piecesAAvailable": _piecesAAvailable = value; break;
+                case "piecesBAvailable": _piecesBAvailable = value; break;
+                case "cratesAvailable": _cratesAvailable = value; break;
+                case "smallBoxesACreated": _smallBoxesACreated = value; break;
+                case "smallBoxesBCreated": _smallBoxesBCreated = value; break;
+                case "smallBoxesAClosed": _smallBoxesAClosed = value; break;
+                case "smallBoxesBClosed": _smallBoxesBClosed = value; break;
             }
             System.Diagnostics.Trace.WriteLine($"[RL] Flag '{flagName}' set to {value}");
         }
@@ -617,14 +775,11 @@ namespace ProcessSimulateSnippets
         {
             double currentSimTime = args.CurrentTime;
             double deltaTime;
-
             if (currentSimTime < _lastSimTime)
                 deltaTime = currentSimTime;
             else
                 deltaTime = currentSimTime - _lastSimTime;
-
             _lastSimTime = currentSimTime;
-
             UpdateHumanMovement(deltaTime);
         }
 
@@ -645,20 +800,23 @@ namespace ProcessSimulateSnippets
             bool hasCrateGripper = _currentGripper == "Crate_gripper";
 
             // --- FEASIBILITY CHECKS ---
-            if (actionId == 0 && (_actionZeroDone || !hasSmartGripper || !_piecesAAvailable))
+            // Action 0: needs smart gripper + pieces A available + small boxes A created + not already done
+            if (actionId == 0 && (_actionZeroDone || !hasSmartGripper || !_piecesAAvailable || !_smallBoxesACreated))
             {
                 UpdateDebug(0, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
-            if (actionId == 1 && (_actionOneDone || !hasSmartGripper || !_piecesBAvailable))
+            // Action 1: needs smart gripper + pieces B available + small boxes B created + not already done
+            if (actionId == 1 && (_actionOneDone || !hasSmartGripper || !_piecesBAvailable || !_smallBoxesBCreated))
             {
                 UpdateDebug(1, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
+            // Action 2: needs actions 0,1,5 done + smart gripper + boxes A closed + not already done
             if (actionId == 2 && (!_actionZeroDone || !_actionOneDone || !_actionFiveDone ||
-                                   !hasSmartGripper || _actionTwoDone))
+                                   !hasSmartGripper || _actionTwoDone || !_smallBoxesAClosed))
             {
                 UpdateDebug(2, -10.0);
                 return new StepResult(BuildObservation(), -10.0, true, false);
@@ -689,8 +847,9 @@ namespace ProcessSimulateSnippets
                 return new StepResult(BuildObservation(), -5.0, true, false);
             }
 
+            // Action 7: needs action 5 done + smart gripper + action 1 done + boxes B closed + not already done
             if (actionId == 7 && (!_actionFiveDone || !hasSmartGripper ||
-                                   !_actionOneDone || _actionSevenDone))
+                                   !_actionOneDone || _actionSevenDone || !_smallBoxesBClosed))
             {
                 UpdateDebug(7, -5.0);
                 return new StepResult(BuildObservation(), -5.0, true, false);
@@ -743,7 +902,7 @@ namespace ProcessSimulateSnippets
                         n_sequential_op = 2; op_type = "pp"; home_pose = pp_home;
                         optimize_config = false;
                         if (currentY != pp_pose_rob) { check_pos = true; rob_pos = pp_station; }
-                        _actionZeroDone = true;
+                        //_actionZeroDone = true;
                         break;
 
                     case 1:
@@ -752,7 +911,7 @@ namespace ProcessSimulateSnippets
                         n_sequential_op = 2; op_type = "pp"; home_pose = pp_home;
                         optimize_config = false;
                         if (currentY != pp_pose_rob) { check_pos = true; rob_pos = pp_station; }
-                        _actionOneDone = true;
+                        //_actionOneDone = true;
                         break;
 
                     case 2:
@@ -838,6 +997,11 @@ namespace ProcessSimulateSnippets
                     _totalRobotTime += opTime;
                 }
 
+                // After the execution loop
+                if (actionId == 0) _actionZeroDone = true;
+                if (actionId == 1) _actionOneDone = true;
+
+                // Reward computation
                 reward = -opTime * 0.01;
 
                 if (actionId == 8)
@@ -917,11 +1081,13 @@ namespace ProcessSimulateSnippets
             if (actionId == 2)
             {
                 _robotResource.AttachItem(small_boxes_A_1[it], "Crate_3");
+                _robotResource.AttachItem(cover_boxes_A_1[it], "Crate_3");
                 _robotResource.AttachItem(pieces_A_1[it], "Crate_3");
             }
             if (actionId == 7)
             {
                 _robotResource.AttachItem(small_boxes_B_1[it], "Crate_2");
+                _robotResource.AttachItem(cover_boxes_B_1[it], "Crate_2");
                 _robotResource.AttachItem(pieces_B_1[it], "Crate_2");
             }
             if (actionId == 5)
@@ -1016,10 +1182,16 @@ namespace ProcessSimulateSnippets
             double crate3Removed = _actionSixDone ? 1.0 : 0.0;
             double boxBInCrate2 = _actionSevenDone ? 1.0 : 0.0;
 
+            // Human flags
             double piecesAReady = _piecesAAvailable ? 1.0 : 0.0;
             double piecesBReady = _piecesBAvailable ? 1.0 : 0.0;
             double cratesReady = _cratesAvailable ? 1.0 : 0.0;
+            double boxesACreated = _smallBoxesACreated ? 1.0 : 0.0;
+            double boxesBCreated = _smallBoxesBCreated ? 1.0 : 0.0;
+            double boxesAClosed = _smallBoxesAClosed ? 1.0 : 0.0;
+            double boxesBClosed = _smallBoxesBClosed ? 1.0 : 0.0;
 
+            // State vector: 21 elements
             var state = new List<double>
             {
                 railPos,          // 0
@@ -1038,31 +1210,41 @@ namespace ProcessSimulateSnippets
                 boxBInCrate2,     // 13
                 piecesAReady,     // 14
                 piecesBReady,     // 15
-                cratesReady       // 16
+                cratesReady,      // 16
+                boxesACreated,    // 17  NEW
+                boxesBCreated,    // 18  NEW
+                boxesAClosed,     // 19  NEW
+                boxesBClosed      // 20  NEW
             };
 
             bool hasSmartGripper = _currentGripper == "Smart_gripper";
             bool hasCrateGripper = _currentGripper == "Crate_gripper";
 
+            // Action 2: needs boxes A closed
+            bool action2Feasible = _actionZeroDone && _actionOneDone && _actionFiveDone &&
+                                   hasSmartGripper && !_actionTwoDone && _smallBoxesAClosed;
+
             bool action6Feasible = hasCrateGripper && _actionTwoDone &&
                        (_boxesInCrate3TypeA >= MAX_BOXES_PER_CRATE) && !_actionSixDone;
+
+            // Action 7: needs boxes B closed
             bool action7Feasible = hasSmartGripper && _actionFiveDone &&
-                                   _actionOneDone && !_actionSevenDone;
+                                   _actionOneDone && !_actionSevenDone && _smallBoxesBClosed;
+
             bool action8Feasible = hasCrateGripper && _actionSixDone &&
                                    _actionSevenDone && !_actionEightDone;
 
             var actionMask = new List<int>
             {
-                (!_actionZeroDone && hasSmartGripper && _piecesAAvailable) ? 1 : 0,    // 0
-                (!_actionOneDone && hasSmartGripper && _piecesBAvailable) ? 1 : 0,     // 1
-                (_actionZeroDone && _actionOneDone && _actionFiveDone &&
-                 hasSmartGripper && !_actionTwoDone) ? 1 : 0,                          // 2
-                !hasSmartGripper ? 1 : 0,                                               // 3
-                !hasCrateGripper ? 1 : 0,                                               // 4
-                (!_actionFiveDone && hasCrateGripper && _cratesAvailable) ? 1 : 0,      // 5
-                action6Feasible ? 1 : 0,                                                // 6
-                action7Feasible ? 1 : 0,                                                // 7
-                action8Feasible ? 1 : 0                                                 // 8
+                (!_actionZeroDone && hasSmartGripper && _piecesAAvailable && _smallBoxesACreated) ? 1 : 0,  // 0
+                (!_actionOneDone && hasSmartGripper && _piecesBAvailable && _smallBoxesBCreated) ? 1 : 0,   // 1
+                action2Feasible ? 1 : 0,                                                                     // 2
+                !hasSmartGripper ? 1 : 0,                                                                    // 3
+                !hasCrateGripper ? 1 : 0,                                                                    // 4
+                (!_actionFiveDone && hasCrateGripper && _cratesAvailable) ? 1 : 0,                           // 5
+                action6Feasible ? 1 : 0,                                                                     // 6
+                action7Feasible ? 1 : 0,                                                                     // 7
+                action8Feasible ? 1 : 0                                                                      // 8
             };
 
             return new ObservationPacket
