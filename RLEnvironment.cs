@@ -13,6 +13,7 @@ namespace ProcessSimulateSnippets
         public List<string> UnblankResources { get; set; }
         public List<string> BlankResources { get; set; }
         public string UnlocksFlag { get; set; }
+        public double CustomPause { get; set; }
         public HumanWaypointAction()
         {
             RelocateResources = new List<string>();
@@ -94,10 +95,50 @@ namespace ProcessSimulateSnippets
         //  HUMAN TASK DEFINITIONS
         // =====================================================
 
+        private readonly HumanTask _htInspection1 = new HumanTask
+        {
+            Name = "Inspection 1",
+            Waypoints = new List<string> {
+                "human_home_frame",
+                "human_inspection_1_a",
+                "human_inspection_1_b", 
+                "human_home_frame"
+            },
+                    Actions = new List<HumanWaypointAction> {
+                new HumanWaypointAction {
+                    WaypointIndex = 1, 
+                    CustomPause = 15.0 
+                }
+            }
+        };
+
+        private readonly HumanTask _htInspection2 = new HumanTask
+        {
+            Name = "Inspection 2",
+            Waypoints = new List<string> {
+                "human_home_frame",
+                "human_inspection_2_a", 
+                "human_inspection_2_b",
+                "human_inspection_2_c",
+                "human_inspection_2_d",
+                "human_inspection_2_e",
+                "human_inspection_2_f",
+                "human_inspection_2_g",
+                "human_inspection_2_h",
+                "human_home_frame"
+            },
+                    Actions = new List<HumanWaypointAction> {
+                new HumanWaypointAction {
+                    WaypointIndex = 4, 
+                    CustomPause = 15.0
+                }
+            }
+        };
+
         private readonly HumanTask _htPiecesA = new HumanTask
         {
             Name = "Deliver Pieces A",
-            Waypoints = new List<string> { "human_home_frame", "human_leave_pallet_A_1", "human_home_frame" },
+            Waypoints = new List<string> { "human_home_frame", "human_leave_pallet_A_1", "human_leave_pallet_A_2", "human_home_frame" },
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string> { "Pallet_pieces_A" },
@@ -110,7 +151,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htPiecesB = new HumanTask
         {
             Name = "Deliver Pieces B",
-            Waypoints = new List<string> { "human_home_frame", "human_leave_pallet_B_1", "human_home_frame" },
+            Waypoints = new List<string> { "human_home_frame", "human_leave_pallet_B_1", "human_leave_pallet_B_2", "human_home_frame" },
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string> { "Pallet_pieces_B" },
@@ -127,7 +168,7 @@ namespace ProcessSimulateSnippets
                 "human_home_frame", "human_leave_crates_1", "human_leave_crates_2",
                 "human_leave_crates_3", "human_leave_crates_4", "human_leave_crates_5",
                 "human_leave_crates_6", "human_leave_crates_7", "human_leave_crates_8",
-                "human_leave_crates_9", "human_leave_crates_10", "human_home_frame"
+                "human_leave_crates_9", "human_leave_crates_10", "human_leave_crates_11", "human_home_frame"
             },
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 5,
@@ -142,7 +183,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCreateBoxesA1 = new HumanTask
         {
             Name = "Create Small Boxes A (batch 1)",
-            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes_1", "human_create_boxes_2", "human_home_frame" },
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string> { "Type_A_box_left_1", "Type_A_box_right_1" },          
@@ -156,7 +197,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCreateBoxesB1 = new HumanTask
         {
             Name = "Create Small Boxes B (batch 1)",
-            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes_1", "human_create_boxes_2", "human_home_frame" },
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string> { "Type_B_box_left_1", "Type_B_box_right_1" },    
@@ -171,7 +212,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCloseBoxesA1 = new HumanTask
         {
             Name = "Close Small Boxes A (batch 1)",
-            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes_1", "human_close_boxes_2", "human_home_frame" },
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
@@ -184,7 +225,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCloseBoxesB1 = new HumanTask
         {
             Name = "Close Small Boxes B (batch 1)",
-            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes_1", "human_close_boxes_2", "human_home_frame" },
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
@@ -198,7 +239,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCreateBoxesA2 = new HumanTask
         {
             Name = "Create Small Boxes A (batch 2)",
-            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },     
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes_1", "human_create_boxes_2", "human_home_frame" },     
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string> { "Type_A_box_left_2", "Type_A_box_right_2" },           
@@ -212,7 +253,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCreateBoxesB2 = new HumanTask
         {
             Name = "Create Small Boxes B (batch 2)",
-            Waypoints = new List<string> { "human_home_frame", "human_create_boxes", "human_home_frame" },     
+            Waypoints = new List<string> { "human_home_frame", "human_create_boxes_1", "human_create_boxes_2", "human_home_frame" },     
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string> { "Type_B_box_left_2", "Type_B_box_right_2" },           
@@ -227,7 +268,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCloseBoxesA2 = new HumanTask
         {
             Name = "Close Small Boxes A (batch 2)",
-            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },      
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes_1", "human_close_boxes_2", "human_home_frame" },      
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
@@ -240,7 +281,7 @@ namespace ProcessSimulateSnippets
         private readonly HumanTask _htCloseBoxesB2 = new HumanTask
         {
             Name = "Close Small Boxes B (batch 2)",
-            Waypoints = new List<string> { "human_home_frame", "human_close_boxes", "human_home_frame" },     
+            Waypoints = new List<string> { "human_home_frame", "human_close_boxes_1", "human_close_boxes_2", "human_home_frame" },     
             Actions = new List<HumanWaypointAction> { new HumanWaypointAction {
                 WaypointIndex = 1,
                 RelocateResources = new List<string>(), RelocateFrames = new List<string>(),
@@ -254,7 +295,7 @@ namespace ProcessSimulateSnippets
         {
             Name = "Wait",
             IsWaitTask = true,
-            WaitDuration = 10.0,
+            WaitDuration = 15.0,
             Waypoints = new List<string>(),
             Actions = new List<HumanWaypointAction>()
         };
@@ -358,6 +399,17 @@ namespace ProcessSimulateSnippets
         private readonly string _crateLowOutfeed = "crate_low_on_table_outfeed";
         private readonly string _crate2Outfeed = "crate_middle_on_table_outfeed";
         private readonly List<string> slider_frames = new List<string> { "crate_low_on_slider_station", "crate_middle_on_slider_station", "crate_top_on_slider_station" };
+
+        // =====================================================
+        // SAFETY SPEED CONTROL (continuous speed reduction at DeltaT seconds)
+        // =====================================================
+
+        private const double DangerZoneDistance = 1000.0;        // mm
+        private const double CollaborativeZoneDistance = 2000.0; // mm
+
+        private const double DangerZoneSpeedFactor = 0.05;       // 5% of the maximum speed
+        private const double CollaborativeSpeedFactor = 0.35;    // 35% of the maximum speed
+        private const double NominalSpeedFactor = 1.0;
 
         // =====================================================
         //  CONSTRUCTOR
@@ -470,6 +522,8 @@ namespace ProcessSimulateSnippets
             if (!_htCloseBoxesA2Done && _action9Done) feasible.Add(_htCloseBoxesA2);
             if (!_htCloseBoxesB2Done && _action11Done) feasible.Add(_htCloseBoxesB2);
 
+            feasible.Add(_htInspection1);
+            feasible.Add(_htInspection2);
             feasible.Add(_htWait);
 
             _currentHumanTask = feasible[_humanRng.Next(feasible.Count)];
@@ -548,6 +602,7 @@ namespace ProcessSimulateSnippets
         {
             if (_currentHumanTask == null) return;
             bool acted = false;
+            double pauseDuration = 0;
             foreach (var a in _currentHumanTask.Actions)
             {
                 if (a.WaypointIndex == _humanWaypointIndex)
@@ -558,9 +613,10 @@ namespace ProcessSimulateSnippets
                     foreach (string r in a.BlankResources) _robotResource.ChangeVisibility(r, true);
                     if (!string.IsNullOrEmpty(a.UnlocksFlag)) SetHumanFlag(a.UnlocksFlag, true);
                     acted = true;
+                    pauseDuration = a.CustomPause > 0 ? a.CustomPause : WAYPOINT_PAUSE;
                 }
             }
-            if (acted) { _humanWaiting = true; _humanWaitRemaining = WAYPOINT_PAUSE; }
+            if (acted) { _humanWaiting = true; _humanWaitRemaining = pauseDuration; }
         }
 
         private void SetHumanFlag(string f, bool v)
@@ -581,12 +637,32 @@ namespace ProcessSimulateSnippets
             }
         }
 
-        private void OnTimeIntervalReached(object sender, TxSimulationPlayer_TimeIntervalReachedEventArgs args)
+        private void OnTimeIntervalReached(
+        object sender,
+        TxSimulationPlayer_TimeIntervalReachedEventArgs args)
         {
             double t = args.CurrentTime;
+
             double dt = (t < _lastSimTime) ? t : t - _lastSimTime;
+
             _lastSimTime = t;
+
+            // -------------------------------------------------
+            // HUMAN UPDATE
+            // -------------------------------------------------
             UpdateHumanMovement(dt);
+
+            // -------------------------------------------------
+            // DISTANCE-BASED SPEED CONTROL
+            // -------------------------------------------------
+            double speedFactor = ComputeSpeedFactor();
+
+            TxRoboticIntParam speedParam =
+                new TxRoboticIntParam(
+                    "REDUCE_SPEED",
+                    (int)(speedFactor * 100));
+
+            _robot.SetParameter(speedParam);
         }
 
         // =====================================================
@@ -802,6 +878,9 @@ namespace ProcessSimulateSnippets
             TxApplication.ActiveDocument.CurrentOperation = myop; _player.Play();
             _player.TimeIntervalReached -= new TxSimulationPlayer_TimeIntervalReachedEventHandler(OnTimeIntervalReached);
 
+            //var real_time_pp = _player.CurrentTime;
+            //System.Diagnostics.Trace.WriteLine($"Real duration: {real_time_pp}");
+
             // Attach items to crates
             if (aId == 2) { _robotResource.AttachItem(small_boxes_A_1[it], "Crate_3"); _robotResource.AttachItem(cover_boxes_A_1[it], "Crate_3"); _robotResource.AttachItem(pieces_A_1[it], "Crate_3"); }
             if (aId == 10) { _robotResource.AttachItem(small_boxes_A_2[it], "Crate_3"); _robotResource.AttachItem(cover_boxes_A_2[it], "Crate_3"); _robotResource.AttachItem(pieces_A_2[it], "Crate_3"); }
@@ -908,6 +987,31 @@ namespace ProcessSimulateSnippets
             _created_deviceOps.Clear();
             _snapshot.Apply(_snapParams); TxApplication.RefreshDisplay();
             _player?.ResetToDefaultSetting(); _communicator?.Dispose();
+        }
+
+        private double GetHumanRobotDistance()
+        {
+            TxVector r = _robot.TCPF.AbsoluteLocation.Translation;
+            TxVector h = _humanProxy.AbsoluteLocation.Translation;
+
+            double dx = r.X - h.X;
+            double dy = r.Y - h.Y;
+            double dz = r.Z - h.Z;
+
+            return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        private double ComputeSpeedFactor()
+        {
+            double distance = GetHumanRobotDistance();
+
+            if (distance < DangerZoneDistance)
+                return DangerZoneSpeedFactor;
+
+            if (distance < CollaborativeZoneDistance)
+                return CollaborativeSpeedFactor;
+
+            return NominalSpeedFactor;
         }
     }
 }
