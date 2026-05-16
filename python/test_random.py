@@ -16,7 +16,7 @@ ACTION_NAMES = {
     2: "Put boxes A in crate 3 (batch 1)",
     3: "Mount Smart gripper",
     4: "Mount Crate gripper",
-    5: "Put crates on slider",
+    5: "Put one crate on slider",
     6: "Remove crate 3",
     7: "Put boxes B in crate 2 (batch 1)",
     8: "Remove crate 2",
@@ -24,6 +24,7 @@ ACTION_NAMES = {
     10: "Put boxes A in crate 3 (batch 2)",
     11: "Fill boxes B (batch 2)",
     12: "Put boxes B in crate 2 (batch 2)",
+    13: "Wait"
 }
 
 NUM_EPISODES = 2
